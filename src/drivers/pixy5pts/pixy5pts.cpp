@@ -59,6 +59,9 @@
 #include <nuttx/wqueue.h>
 #include <systemlib/err.h>
 
+#include <uORB/uORB.h>
+#include <uORB/topics/camera_pixy5pts.h>
+
 /** Configuration Constants **/
 #define PIXY5PTS_I2C_BUS			PX4_I2C_BUS_EXPANSION
 #define PIXY5PTS_I2C_ADDRESS		0x54 /** 7-bit address (non shifted) **/
@@ -115,6 +118,8 @@ private:
 	bool _sensor_ok;
 	work_s _work;
 	uint32_t _read_failures;
+
+    orb_advert_t _camera_pixy5pts_topic;
 };
 
 /** global pointer for single PIXY5PTS sensor **/
@@ -132,7 +137,8 @@ PIXY5PTS::PIXY5PTS(int bus, int address) :
     I2C("irlock", PIXY5PTS0_DEVICE_PATH, bus, address, 400000),
 	_reports(nullptr),
 	_sensor_ok(false),
-	_read_failures(0)
+    _read_failures(0),
+    _camera_pixy5pts_topic(nullptr)
 {
 	memset(&_work, 0, sizeof(_work));
 }
@@ -283,6 +289,7 @@ void PIXY5PTS::cycle()
     work_queue(HPWORK, &_work, (worker_t)&PIXY5PTS::cycle_trampoline, this, USEC2TICK(PIXY5PTS_CONVERSION_INTERVAL_US));
 }
 
+//this method is only called from ardupilot application design
 ssize_t PIXY5PTS::read(struct file *filp, char *buffer, size_t buflen)
 {
     unsigned count = buflen / sizeof(struct pixy5pts_s);
@@ -342,32 +349,64 @@ int PIXY5PTS::read_device()
 	_reports->flush();
 	int num_objects = 0;
 
-    //instance of new pixy topic
-
     //get all new objects from pixy
+    //todo: what about sending 5 points from pixy in one frame
+    struct pixy5pts_s block;
     while (sync_device() && (num_objects < PIXY5PTS_OBJECTS_MAX)) {
-        struct pixy5pts_s block;
 
 		if (read_device_block(&block) != OK) {
 			break;
 		}
 
 		_reports->force(&block);
-
-        //add to pixy topic
-
         num_objects++;
-
 	}
-    //todo:
-    //iterate over _reports
-    //convert new items to ned
-    //add to topic
-    //send over uorb
-    //number of new points
-    //points array
 
-	return OK;
+    //iterate over new buffer objects if there are any
+    if(num_objects > 0)
+    {
+        struct camera_pixy5pts_s report;
+        //struct camera_pixy5pts_s report;
+        report.timestamp = hrt_absolute_time();
+        report.count = num_objects;
+
+        //add all new objects to topic
+        while (_reports->count() > 0) {
+            _reports->get(&block);
+
+            unsigned count = 0;
+            //convert to ned
+            float xCoord = block.angle_x;
+            float yCoord = block.angle_y;
+
+            //set to report
+            report.x_coord[count] = xCoord;
+            report.y_coord[count] = yCoord;
+
+            //counter increment
+            count++;
+        }
+
+        //send new report over uorb
+        if (_camera_pixy5pts_topic == nullptr) {
+            _camera_pixy5pts_topic = orb_advertise(ORB_ID(camera_pixy5pts), &report);
+
+        } else {
+            /* publish it */
+            orb_publish(ORB_ID(camera_pixy5pts), _camera_pixy5pts_topic, &report);
+        }
+
+        //debug output
+        warnx("new report with %d points, time %lld", report.count, report.timestamp);
+        for(unsigned i=0; i<num_objects; ++i)
+        {
+            warnx("x:%4.3f y:%4.3f",
+                  (double)report.x_coord[i],
+                  (double)report.y_coord[i]);
+        }
+    }
+
+    return OK;
 }
 
 /** read a word (two bytes) from sensor **/
@@ -402,14 +441,22 @@ int PIXY5PTS::read_device_block(struct pixy5pts_s *block)
 		return -EIO;
 	}
 
-	/** convert to angles **/
-	block->target_num = target_num;
-    block->angle_x = (((float)(pixel_x - PIXY5PTS_CENTER_X)) / PIXY5PTS_PIXELS_PER_RADIAN_X);
-    block->angle_y = (((float)(pixel_y - PIXY5PTS_CENTER_Y)) / PIXY5PTS_PIXELS_PER_RADIAN_Y);
-    block->size_x = pixel_size_x / PIXY5PTS_PIXELS_PER_RADIAN_X;
-    block->size_y = pixel_size_y / PIXY5PTS_PIXELS_PER_RADIAN_Y;
+//	/** convert to angles **/
+//	block->target_num = target_num;
+//    block->angle_x = (((float)(pixel_x - PIXY5PTS_CENTER_X)) / PIXY5PTS_PIXELS_PER_RADIAN_X);
+//    block->angle_y = (((float)(pixel_y - PIXY5PTS_CENTER_Y)) / PIXY5PTS_PIXELS_PER_RADIAN_Y);
+//    block->size_x = pixel_size_x / PIXY5PTS_PIXELS_PER_RADIAN_X;
+//    block->size_y = pixel_size_y / PIXY5PTS_PIXELS_PER_RADIAN_Y;
 
-	block->timestamp = hrt_absolute_time();
+//	block->timestamp = hrt_absolute_time();
+
+    block->target_num = target_num;
+    block->angle_x = (float)pixel_x;
+    block->angle_y = (float)pixel_y;
+    block->size_x = (float)pixel_size_x;
+    block->size_y = (float)pixel_size_y;
+    block->timestamp = hrt_absolute_time();
+
 	return status;
 }
 
