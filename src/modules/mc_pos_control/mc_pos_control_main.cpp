@@ -158,6 +158,7 @@ private:
 	control::BlockParamFloat _manual_thr_min;
 	control::BlockParamFloat _manual_thr_max;
 
+    //ghm1: in controllib/blocks.hpp: beinhaltet einen lowpass
 	control::BlockDerivative _vel_x_deriv;
 	control::BlockDerivative _vel_y_deriv;
 	control::BlockDerivative _vel_z_deriv;
@@ -221,15 +222,15 @@ private:
 	bool _reset_pos_sp;
 	bool _reset_alt_sp;
 	bool _mode_auto;
-	bool _pos_hold_engaged;
-	bool _alt_hold_engaged;
+    bool _pos_hold_engaged; //ghm1: benutzereingaben sind nicht gross genug, wir versuchen die position zu halten
+    bool _alt_hold_engaged; //ghm1: benutzereingaben sind nicht gross genug, wir versuchen die höhe zu halten
 	bool _run_pos_control;
 	bool _run_alt_control;
 
-	math::Vector<3> _pos;
-	math::Vector<3> _pos_sp;
-	math::Vector<3> _vel;
-	math::Vector<3> _vel_sp;
+    math::Vector<3> _pos;   //ghm1: lokale hilfsvariable, wird mit _local_pos initialisiert
+    math::Vector<3> _pos_sp;//ghm1:
+    math::Vector<3> _vel;   //ghm1: lokale hilfsvariable, wird mit _local_pos.v* initialisiert
+    math::Vector<3> _vel_sp;//ghm1:
 	math::Vector<3> _vel_prev;			/**< velocity on previous step */
 	math::Vector<3> _vel_ff;
 
@@ -607,20 +608,25 @@ MulticopterPositionControl::task_main_trampoline(int argc, char *argv[])
 void
 MulticopterPositionControl::update_ref()
 {
+    //ghm1: test, if timestamps are different, then we have to update -> wir haben eine neue local position erhalten
 	if (_local_pos.ref_timestamp != _ref_timestamp) {
 		double lat_sp, lon_sp;
 		float alt_sp = 0.0f;
 
+        //ghm1: beim ersten durchlauf nicht ausführen
 		if (_ref_timestamp != 0) {
 			/* calculate current position setpoint in global frame */
+            //ghm1: from src/lib/geo.c: bestimmung von lat_sp, lon_sp und alt_sp unter berücksichtigung des neuen _pos_sp
 			map_projection_reproject(&_ref_pos, _pos_sp(0), _pos_sp(1), &lat_sp, &lon_sp);
 			alt_sp = _ref_alt - _pos_sp(2);
 		}
 
 		/* update local projection reference */
+        //ghm1: set _ref_pos to newly calculated values
 		map_projection_init(&_ref_pos, _local_pos.ref_lat, _local_pos.ref_lon);
 		_ref_alt = _local_pos.ref_alt;
 
+        //ghm1: beim ersten durchlauf nicht ausführen
 		if (_ref_timestamp != 0) {
 			/* reproject position setpoint to new reference */
 			map_projection_project(&_ref_pos, lat_sp, lon_sp, &_pos_sp.data[0], &_pos_sp.data[1]);
@@ -726,6 +732,7 @@ MulticopterPositionControl::control_manual(float dt)
 	/* horizontal axes */
 	if (_control_mode.flag_control_position_enabled) {
 		/* check for pos. hold */
+        //ghm1: check, ob ermittelte geschwindigkeit aus rc eingabe kleiner als deadband aus param hold_xy_dz
 		if (fabsf(req_vel_sp(0)) < _params.hold_xy_dz && fabsf(req_vel_sp(1)) < _params.hold_xy_dz) {
 			if (!_pos_hold_engaged) {
 				if (_params.hold_max_xy < FLT_EPSILON || (fabsf(_vel(0)) < _params.hold_max_xy
@@ -738,17 +745,24 @@ MulticopterPositionControl::control_manual(float dt)
 			}
 
 		} else {
+            //ghm1: ist dies nicht der fall, so regeln wir nicht auf position hold
 			_pos_hold_engaged = false;
 		}
 
 		/* set requested velocity setpoint */
 		if (!_pos_hold_engaged) {
+            //ghm1: wir regeln nicht auf position hold, sondern auf benutzer eingaben aus rc
+            //? unser position setpoint ist unsere aktuelle lokale position ? wahrscheinlich wird position setpoint in diesem fall nicht benutzt!
 			_pos_sp(0) = _pos(0);
 			_pos_sp(1) = _pos(1);
+            //ghm1: position controller ausschalten
 			_run_pos_control = false; /* request velocity setpoint to be used, instead of position setpoint */
+            //ghm1: zuvor berechnete geschwindigkeit als velocity setpoint verwenden
 			_vel_sp(0) = req_vel_sp_scaled(0);
 			_vel_sp(1) = req_vel_sp_scaled(1);
 		}
+        //ghm1: das heisst auch, andernfalls wird die requested velocity nicht berücksichtig und dafür später der position controller durchlaufen,
+        //eine position und ein positionsfehler berechnet.
 	}
 
 	/* vertical axis */
@@ -816,7 +830,7 @@ MulticopterPositionControl::control_offboard(float dt)
 			/* Control altitude */
 			_pos_sp(2) = _pos_sp_triplet.current.z;
 
-		} else if (_control_mode.flag_control_climb_rate_enabled && _pos_sp_triplet.current.velocity_valid) {
+        } else if (_control_mode.flag_control_climb_rate_enabled && _pos_sp_triplet.current.velocity_valid) {
 			/* reset alt setpoint to current altitude if needed */
 			reset_alt_sp();
 
@@ -859,6 +873,7 @@ MulticopterPositionControl::cross_sphere_line(const math::Vector<3> &sphere_c, f
 
 void MulticopterPositionControl::control_auto(float dt)
 {
+    //ghm1: im ersten durchlauf pos and alt setpoint resetten
 	if (!_mode_auto) {
 		_mode_auto = true;
 		/* reset position setpoint on AUTO mode activation */
@@ -867,6 +882,7 @@ void MulticopterPositionControl::control_auto(float dt)
 	}
 
 	//Poll position setpoint
+    //ghm1: test, ob es einen neuen setpoint gibt und diesen abholen und auf validität prüfen
 	bool updated;
 	orb_check(_pos_sp_triplet_sub, &updated);
 
@@ -884,15 +900,18 @@ void MulticopterPositionControl::control_auto(float dt)
 	bool current_setpoint_valid = false;
 	bool previous_setpoint_valid = false;
 
+    //ghm1: vorherigen und nächster setpoint im lokalen coordinate system
 	math::Vector<3> prev_sp;
 	math::Vector<3> curr_sp;
 
+    //ghm1: transformation des current point in local NED frame
 	if (_pos_sp_triplet.current.valid) {
 
 		/* project setpoint to local frame */
 		map_projection_project(&_ref_pos,
-				       _pos_sp_triplet.current.lat, _pos_sp_triplet.current.lon,
+                       _pos_sp_triplet.current.lat, _pos_sp_triplet.current.lon,
 				       &curr_sp.data[0], &curr_sp.data[1]);
+        //ghm1: altitude setpoint: ist negativ, da NED;
 		curr_sp(2) = -(_pos_sp_triplet.current.alt - _ref_alt);
 
 		if (PX4_ISFINITE(curr_sp(0)) &&
@@ -902,6 +921,7 @@ void MulticopterPositionControl::control_auto(float dt)
 		}
 	}
 
+    //ghm1: transformation des previous point in local NED frame
 	if (_pos_sp_triplet.previous.valid) {
 		map_projection_project(&_ref_pos,
 				       _pos_sp_triplet.previous.lat, _pos_sp_triplet.previous.lon,
@@ -915,11 +935,15 @@ void MulticopterPositionControl::control_auto(float dt)
 		}
 	}
 
+    //ghm1: die folgende bedingung wird nur erfüllt, wenn der curr_sp zuvor finite war
 	if (current_setpoint_valid) {
 		/* in case of interrupted mission don't go to waypoint but stay at current position */
+        //ghm1: d.h., wenn current setpoint nicht valid, dann werden die folgenden flags nicht true und in der folge haben die
+        //aufgerufenen methoden reset_pos_sp und reset_alt_sp am begin von control_auto keine auswirkung
 		_reset_pos_sp = true;
 		_reset_alt_sp = true;
 
+        //ghm1: im folgenden wird eine skalierung eingeführt. wird mit scaled multipliziert,
 		/* scaled space: 1 == position error resulting max allowed speed */
 		math::Vector<3> scale = _params.pos_p.edivide(_params.vel_max);	// TODO add mult param here
 
@@ -935,15 +959,23 @@ void MulticopterPositionControl::control_auto(float dt)
 			if ((curr_sp - prev_sp).length() > MIN_DIST) {
 
 				/* find X - cross point of unit sphere and trajectory */
-				math::Vector<3> pos_s = _pos.emult(scale);
-				math::Vector<3> prev_sp_s = prev_sp.emult(scale);
-				math::Vector<3> prev_curr_s = curr_sp_s - prev_sp_s;
-				math::Vector<3> curr_pos_s = pos_s - curr_sp_s;
-				float curr_pos_s_len = curr_pos_s.length();
+                //ghm1: d.h. wir suchen einen schnittpunkt einer kugel mit radius 1 um die aktuelle position und der trajektorie, die prev und curr verbindet.
+                //aber erst weiter unten!!!
 
+                //ghm1: distanz aktuelle position - zu current setpoint bestimmen. ist diese klein, wird unterschieden, ob es noch einen übernächsten setpoint (next)
+                //gibt, oder ob dies der letzt setpoint ist.
+                math::Vector<3> pos_s = _pos.emult(scale); //ghm1: aktuelle position scaled
+                math::Vector<3> prev_sp_s = prev_sp.emult(scale); //ghm1: prev setpoint scaled
+                math::Vector<3> prev_curr_s = curr_sp_s - prev_sp_s; //ghm1: differenz prev to curr setpoint. wird erst innerhalb der nächsten bedingung verwendet
+                math::Vector<3> curr_pos_s = pos_s - curr_sp_s; //ghm1: distanz aktuelle position - zu current setpoint
+                float curr_pos_s_len = curr_pos_s.length(); //ghm1: länge des vectors
+
+                //ghm1: distanz aktuelle position zu current setpoint kleiner als 1 (im scaled space), d.h. wir sind nah am nächsten setpoint dran
 				if (curr_pos_s_len < 1.0f) {
 					/* copter is closer to waypoint than unit radius */
 					/* check next waypoint and use it to avoid slowing down when passing via waypoint */
+                    //ghm1: wir berücksichtigen die lage des nächsten punktes, um nicht vor dem errechen jedes current points die
+                    //geschwindigkeit zu verlangsamen
 					if (_pos_sp_triplet.next.valid) {
 						math::Vector<3> next_sp;
 						map_projection_project(&_ref_pos,
@@ -981,10 +1013,13 @@ void MulticopterPositionControl::control_auto(float dt)
 						}
 					}
 
+                //ghm1: gibt es keinen nächsten setpoint mehr (next), dann...
 				} else {
+                    //wir suchen einen schnittpunkt einer kugel mit radius 1 um die aktuelle position mit der trajektorie, die prev und curr verbindet.
 					bool near = cross_sphere_line(pos_s, 1.0f, prev_sp_s, curr_sp_s, pos_sp_s);
 
 					if (near) {
+                        //d.h. wir sind nah genug an der trajektorie dran
 						/* unit sphere crosses trajectory */
 
 					} else {
@@ -1006,9 +1041,12 @@ void MulticopterPositionControl::control_auto(float dt)
 		}
 
 		/* move setpoint not faster than max allowed speed */
+        //ghm1: _pos_sp ist der setpoint vom letzten durchlauf (wurde in diesem noch nicht gesetzt), deshalb old, _s steht für scaled
+        // scaling bewirkt wieder, dass der max speed bei 1 liegt.
 		math::Vector<3> pos_sp_old_s = _pos_sp.emult(scale);
 
 		/* difference between current and desired position setpoints, 1 = max speed */
+        //ghm1: pos_sp_s ist der neue setpoint aus diesem durchlauf
 		math::Vector<3> d_pos_m = (pos_sp_s - pos_sp_old_s).edivide(_params.pos_p);
 		float d_pos_m_len = d_pos_m.length();
 
@@ -1017,9 +1055,11 @@ void MulticopterPositionControl::control_auto(float dt)
 		}
 
 		/* scale result back to normal space */
+        //ghm1: zurückskalieren liefert neuen position setpoint _pos_sp
 		_pos_sp = pos_sp_s.edivide(scale);
 
 		/* update yaw setpoint if needed */
+        //ghm1: enthält der _pos_sp_triplet einen gültigen yaw value, dann diesen in den _att_sp eintragen
 		if (PX4_ISFINITE(_pos_sp_triplet.current.yaw)) {
 			_att_sp.yaw_body = _pos_sp_triplet.current.yaw;
 		}
@@ -1038,19 +1078,33 @@ MulticopterPositionControl::task_main()
 	/*
 	 * do subscriptions
 	 */
+    //ghm1: der vehicle status enthält jegliche zustände des copter u.a. den aktuellen mode: main state, navigation substate, arming state.
+    //In der Haupschleife wird aber nur der typ des mavs abgefragt und der Landezustand. Die restlichen Zustände werden dem vehicle_control_mode
+    //entnommen. Dieser wurde zuvor von der commander app parametrisiert.
 	_vehicle_status_sub = orb_subscribe(ORB_ID(vehicle_status));
+    //ghm1: attitude from attitude controller
 	_ctrl_state_sub = orb_subscribe(ORB_ID(control_state));
+    //ghm1: vehicle attitute setpoint -> gewünschtes attitude
 	_att_sp_sub = orb_subscribe(ORB_ID(vehicle_attitude_setpoint));
+    //ghm1: die zustände im vehicle_status entscheiden über die Zustände im vehicle_control_mode. Anhand der zustände der flags im vehicle_control_mode
+    // wird in der hautschleife des position_controllers entschieden, welche controller durchlaufen werden bzw. welche berechnungen aktualisiert werden
 	_control_mode_sub = orb_subscribe(ORB_ID(vehicle_control_mode));
-	_params_sub = orb_subscribe(ORB_ID(parameter_update));
+    //ghm1: zeitstempel des letzten parameter updates. damit wird eine benachrichtigung erhalten, ob sich parameter einstellungen geändert haben. wird in jede schleifendurchlauf geprüft
+    _params_sub = orb_subscribe(ORB_ID(parameter_update));
+    //ghm1: alles das, was über die kanäle der Fernbedienung kommt
 	_manual_sub = orb_subscribe(ORB_ID(manual_control_setpoint));
+    //ghm1: arming state: armed, preamed, ready to arm...
 	_arming_sub = orb_subscribe(ORB_ID(actuator_armed));
+    //ghm1: aktuelle position im lokalen NED frame. wird vom position estimator publiziert.
 	_local_pos_sub = orb_subscribe(ORB_ID(vehicle_local_position));
+    //ghm1: for auto controller previous, current and next desired point in global coord-system. wird später ins lokale transformiert.
 	_pos_sp_triplet_sub = orb_subscribe(ORB_ID(position_setpoint_triplet));
+    //ghm1: desired position in local coordinate system
 	_local_pos_sp_sub = orb_subscribe(ORB_ID(vehicle_local_position_setpoint));
+    //ghm1: desired velocity in global coordinate system
 	_global_vel_sp_sub = orb_subscribe(ORB_ID(vehicle_global_velocity_setpoint));
 
-
+    //ghm1: check if parameters have changed
 	parameters_update(true);
 
 	/* initialize values of critical structs until first regular update */
@@ -1059,17 +1113,23 @@ MulticopterPositionControl::task_main()
 	/* get an initial update for all sensor and status data */
 	poll_subscriptions();
 
+    //ghm1: contoller flags, init to default
 	bool reset_int_z = true;
 	bool reset_int_z_manual = false;
 	bool reset_int_xy = true;
 	bool reset_yaw_sp = true;
 	bool was_armed = false;
 
+    //ghm1: merker für zeitpunkt des letzten Ausführens der schleife. wird hier mit 0 initialisiert, da erste ausführung!
 	hrt_abstime t_prev = 0;
 
+    //ghm1: thrust integral: used for integral part of pid velocity controller: e.g. thrust_int += vel_err * _params.vel_i * dt;
 	math::Vector<3> thrust_int;
+    //reset to default
 	thrust_int.zero();
+    //ghm1: Rotation matrix
 	math::Matrix<3, 3> R;
+    //reset to default
 	R.identity();
 
 	/* wakeup source */
@@ -1078,6 +1138,7 @@ MulticopterPositionControl::task_main()
 	fds[0].fd = _local_pos_sub;
 	fds[0].events = POLLIN;
 
+    //ghm1: main loop beginnt, diese läuft immer im Kreis, alles bisher war initialisierung
 	while (!_task_should_exit) {
 		/* wait for up to 500ms for data */
 		int pret = px4_poll(&fds[0], (sizeof(fds) / sizeof(fds[0])), 500);
@@ -1093,24 +1154,33 @@ MulticopterPositionControl::task_main()
 			continue;
 		}
 
+        //ghm1: test, ob neue daten auf den abonnierten topics/buses
 		poll_subscriptions();
 
 		/* get current rotation matrix and euler angles from control state quaternions */
+        //ghm1: _ctrl_state wird vom attitude estimatior publiziert und beinhaltet u.a. ein quaternion des aktullen attitude
 		math::Quaternion q_att(_ctrl_state.q[0], _ctrl_state.q[1], _ctrl_state.q[2], _ctrl_state.q[3]);
+        //ghm1: quaternion to rotation matrix transformation
 		_R = q_att.to_dcm();
 		math::Vector<3> euler_angles;
+        //ghm1: to euler angles for logging: werden nicht für berechnungen verwendet
 		euler_angles = _R.to_euler();
-		_yaw     = euler_angles(2);
+        _yaw     = euler_angles(2);//nicht verwendet
 
+        //ghm1: parameter update main loop
 		parameters_update(false);
 
 		hrt_abstime t = hrt_absolute_time();
+        //ghm1: ermittlung der vergangenen zeitspanne seit dem letzten ausführen
 		float dt = t_prev != 0 ? (t - t_prev) * 0.000001f : 0.0f;
+        //ghm1: aktuelle zeit für nächsten durchlauf merken
 		t_prev = t;
 
 		// set dt for control blocks
+        //ghm1: geerbt von superblock
 		setDt(dt);
 
+        //ghm1: der copter wird (zum ersten mal) gearmt: tansition not armed -> armed
 		if (_control_mode.flag_armed && !was_armed) {
 			/* reset setpoints and integrals on arming */
 			_reset_pos_sp = true;
@@ -1121,6 +1191,7 @@ MulticopterPositionControl::task_main()
 		}
 
 		/* reset yaw and altitude setpoint for VTOL which are in fw mode */
+        //ghm1: nur relevant für VTOL (vertical take off and land)
 		if (_vehicle_status.is_vtol) {
 			if (!_vehicle_status.is_rotary_wing) {
 				reset_yaw_sp = true;
@@ -1129,15 +1200,19 @@ MulticopterPositionControl::task_main()
 		}
 
 		//Update previous arming state
+        //ghm1: wenn hier was_armed gesetzt wird, wurde initialisierung oben bereits durchlaufen (if wird eingespart und immer gesetzt)
 		was_armed = _control_mode.flag_armed;
 
+        //ghm1: ?
 		update_ref();
 
+        //ghm1: irgendein flag muss gesetzt sein, damit controller überhaupt durchlaufen wird
 		if (_control_mode.flag_control_altitude_enabled ||
 		    _control_mode.flag_control_position_enabled ||
 		    _control_mode.flag_control_climb_rate_enabled ||
 		    _control_mode.flag_control_velocity_enabled) {
 
+            //ghm1: set local position and local velocity to pos and vel
 			_pos(0) = _local_pos.x;
 			_pos(1) = _local_pos.y;
 			_pos(2) = _local_pos.z;
@@ -1156,12 +1231,27 @@ MulticopterPositionControl::task_main()
 			// reset the horizontal and vertical position hold flags for non-manual modes
 			// or if position is not controlled
 			if (!_control_mode.flag_control_position_enabled || !_control_mode.flag_control_manual_enabled) {
+                //ghm1: set local flag for position hold mode
 				_pos_hold_engaged = false;
 			}
 
 			if (!_control_mode.flag_control_altitude_enabled || !_control_mode.flag_control_manual_enabled) {
+                //ghm1: set local flag for altitude hold mode
 				_alt_hold_engaged = false;
 			}
+
+            //ghm1: hier wird festgestellt, ob wir im manual, offboard oder auto control mode sind und die entsprechende routine aufgerufen.
+            // manual: eingaben aus der fernbedienung beeinflussen/steuern direct den velocity setpoint.
+            //im assisted mode (position hold, altitude hold) bestimmt der benutzer zwar die geschwindigkeit durch die rc-eingaben,
+            //ist die eingabe jedoch klein genug, wird versucht die position zu halten
+            //outputs flag, ob position und altitude controller durchlaufen werden müssen, falls nicht eine setpoint velocity aus der benutzereingabe
+            //-> _pos_sp oder _vel_sp
+            //control_offboard
+
+            //auto: _pos_sp_triplet enthält bis zu drei punkte im globalen coordinatensystem, die in control_auto analysiert werden.
+            //per default wird der current setpoint aus _pos_sp_triplet ins lokale coordinatensystem transformiert und so verwendet, wie er ist.
+            //unter weiteren bedingungen wird er evtl. angepasst. In jedem fall liefert die methode einen neuen position setpoint _pos_sp
+            //und evtl. attitude yaw setpoint
 
 			/* select control source */
 			if (_control_mode.flag_control_manual_enabled) {
@@ -1179,6 +1269,8 @@ MulticopterPositionControl::task_main()
 				control_auto(dt);
 			}
 
+            //ghm1: wir sind nicht im manual mode und trotzdem gibt es keinen current setpoint, ausserdem ist der setpoint type IDLE
+            //-> wir befinden uns im idle state
 			if (!_control_mode.flag_control_manual_enabled && _pos_sp_triplet.current.valid
 			    && _pos_sp_triplet.current.type == position_setpoint_s::SETPOINT_TYPE_IDLE) {
 				/* idle state, don't run controller and set zero thrust */
@@ -1186,6 +1278,7 @@ MulticopterPositionControl::task_main()
 				memcpy(&_att_sp.R_body[0], R.data, sizeof(_att_sp.R_body));
 				_att_sp.R_valid = true;
 
+                //ghm1: attitude wird mit 0 initialisiert und publiziert
 				_att_sp.roll_body = 0.0f;
 				_att_sp.pitch_body = 0.0f;
 				_att_sp.yaw_body = _yaw;
@@ -1201,33 +1294,42 @@ MulticopterPositionControl::task_main()
 				}
 
 			} else {
+                //ghm1: hier beginnt position controller (p-loop). Output ist ein velocity setpoint.
+                //der position controller wird nur durchlaufen, wenn zuvor in control_manual ein _pos_sp ermittelt wurde, da user eingabe zu klein war
+                //oder wenn control_auto durchlaufen wurde
 				/* run position & altitude controllers, if enabled (otherwise use already computed velocity setpoints) */
 				if (_run_pos_control) {
+                    //ghm1: Regelfehler * Kp = velocity setpoint
 					_vel_sp(0) = (_pos_sp(0) - _pos(0)) * _params.pos_p(0);
 					_vel_sp(1) = (_pos_sp(1) - _pos(1)) * _params.pos_p(1);
 				}
-
+                //ghm1: genauso verfahren wir mit altitude controller
 				if (_run_alt_control) {
 					_vel_sp(2) = (_pos_sp(2) - _pos(2)) * _params.pos_p(2);
 				}
 
 				/* make sure velocity setpoint is saturated in xy*/
+                //ghm1: länge des geschwindigkeitsvektors ermitteln -> Geschwindigkeit
 				float vel_norm_xy = sqrtf(_vel_sp(0) * _vel_sp(0) +
 							  _vel_sp(1) * _vel_sp(1));
-
+                //ghm1: ist die Geschwindigkeit grösser als die zulässige maximalgeschwindigkeit..
 				if (vel_norm_xy > _params.vel_max(0)) {
 					/* note assumes vel_max(0) == vel_max(1) */
+                    //ghm1: geschwindigkeitsvektor auf länge 1 normierten und mit maximalgeschwindigkeit skalieren
 					_vel_sp(0) = _vel_sp(0) * _params.vel_max(0) / vel_norm_xy;
 					_vel_sp(1) = _vel_sp(1) * _params.vel_max(1) / vel_norm_xy;
 				}
 
 				/* make sure velocity setpoint is saturated in z*/
+                //ghm1: länge des geschwindigkeitsvektors ermitteln -> Geschwindigkeit
 				float vel_norm_z = sqrtf(_vel_sp(2) * _vel_sp(2));
-
+                //ghm1: ist die Geschwindigkeit grösser als die zulässige maximalgeschwindigkeit..
 				if (vel_norm_z > _params.vel_max(2)) {
+                    //ghm1: geschwindigkeitsvektor auf länge 1 normierten und mit maximalgeschwindigkeit skalieren
 					_vel_sp(2) = _vel_sp(2) * _params.vel_max(2) / vel_norm_z;
 				}
 
+                //ghm1: durch das rücksetzten auf true hat der aufruf der reset-methoden wieder auswirkung
 				if (!_control_mode.flag_control_position_enabled) {
 					_reset_pos_sp = true;
 				}
@@ -1236,11 +1338,12 @@ MulticopterPositionControl::task_main()
 					_reset_alt_sp = true;
 				}
 
+                //ghm1: falls wir garkeine geschwindigkeit kontrollieren wollen, setzten wir sie anschliessend auf 0
 				if (!_control_mode.flag_control_velocity_enabled) {
 					_vel_sp(0) = 0.0f;
 					_vel_sp(1) = 0.0f;
 				}
-
+                //ghm1: genauso die climb rate
 				if (!_control_mode.flag_control_climb_rate_enabled) {
 					_vel_sp(2) = 0.0f;
 				}
@@ -1251,6 +1354,7 @@ MulticopterPositionControl::task_main()
 					_vel_sp(2) = _params.land_speed;
 				}
 
+                //ghm1: mit der bestimmung der velocity sind wir fertig, also zuweisen und publizieren
 				_global_vel_sp.vx = _vel_sp(0);
 				_global_vel_sp.vy = _vel_sp(1);
 				_global_vel_sp.vz = _vel_sp(2);
@@ -1263,8 +1367,10 @@ MulticopterPositionControl::task_main()
 					_global_vel_sp_pub = orb_advertise(ORB_ID(vehicle_global_velocity_setpoint), &_global_vel_sp);
 				}
 
+                //ghm1: hier beginnt der velocity controller
 				if (_control_mode.flag_control_climb_rate_enabled || _control_mode.flag_control_velocity_enabled) {
 					/* reset integrals if needed */
+                    //ghm1: reset integrals for climb rate controller
 					if (_control_mode.flag_control_climb_rate_enabled) {
 						if (reset_int_z) {
 							reset_int_z = false;
@@ -1288,6 +1394,7 @@ MulticopterPositionControl::task_main()
 						reset_int_z = true;
 					}
 
+                    //ghm1: reset integrals for velocity controller wenn reset_int_xy true
 					if (_control_mode.flag_control_velocity_enabled) {
 						if (reset_int_xy) {
 							reset_int_xy = false;
@@ -1300,18 +1407,26 @@ MulticopterPositionControl::task_main()
 					}
 
 					/* velocity error */
+                    //ghm1: velocity error: velocity setpoint minus aktuelle geschwindigket
 					math::Vector<3> vel_err = _vel_sp - _vel;
 
 					/* derivative of velocity error, /
 					 * does not includes setpoint acceleration */
+                    //ghm1: ermittlung der Ableitung der geschwindigkeit für den D-Anteil der PID-controllers
+                    //macht ein update auf den lowpassfilter und liefert die aktuelle ableitung zurück
 					math::Vector<3> vel_err_d;
 					vel_err_d(0) = _vel_x_deriv.update(-_vel(0));
 					vel_err_d(1) = _vel_y_deriv.update(-_vel(1));
 					vel_err_d(2) = _vel_z_deriv.update(-_vel(2));
 
+                    /****************************************************************************/
+                    //hier gehts los!
 					/* thrust vector in NED frame */
+                    //ghm1: vel_err * Kp + vel_err_d * Kd + vel_err * Ki * dt
+                    //integral anteil wir später berechnet
 					math::Vector<3> thrust_sp = vel_err.emult(_params.vel_p) + vel_err_d.emult(_params.vel_d) + thrust_int;
 
+                    //ghm1: reset again if not needed
 					if (!_control_mode.flag_control_velocity_enabled) {
 						thrust_sp(0) = 0.0f;
 						thrust_sp(1) = 0.0f;
@@ -1327,7 +1442,7 @@ MulticopterPositionControl::task_main()
 
 					/* limit min lift */
 					float thr_min = _params.thr_min;
-
+                    //ghm1: minumum thrust muss grösser oder gleich 0 sein
 					if (!_control_mode.flag_control_velocity_enabled && thr_min < 0.0f) {
 						/* don't allow downside thrust direction in manual attitude mode */
 						thr_min = 0.0f;
@@ -1336,6 +1451,7 @@ MulticopterPositionControl::task_main()
 					float tilt_max = _params.tilt_max_air;
 
 					/* adjust limits for landing mode */
+                    //ghm1: befinden wir uns im landeanflug, dann tilt_max für landung setzen
 					if (!_control_mode.flag_control_manual_enabled && _pos_sp_triplet.current.valid &&
 					    _pos_sp_triplet.current.type == position_setpoint_s::SETPOINT_TYPE_LAND) {
 						/* limit max tilt and min lift when landing */
@@ -1347,6 +1463,7 @@ MulticopterPositionControl::task_main()
 					}
 
 					/* limit min lift */
+                    //ghm1: hier wird die min_thrust begrenunzung überprüft, ggf. gesetzt und der merker saturation_z gesetzt
 					if (-thrust_sp(2) < thr_min) {
 						thrust_sp(2) = -thr_min;
 						saturation_z = true;
@@ -1426,6 +1543,7 @@ MulticopterPositionControl::task_main()
 					}
 
 					/* update integrals */
+                    //ghm1: nur, wenn control velocity mode und keine sättigung eingetreten ist
 					if (_control_mode.flag_control_velocity_enabled && !saturation_xy) {
 						thrust_int(0) += vel_err(0) * _params.vel_i(0) * dt;
 						thrust_int(1) += vel_err(1) * _params.vel_i(1) * dt;
@@ -1435,19 +1553,25 @@ MulticopterPositionControl::task_main()
 						thrust_int(2) += vel_err(2) * _params.vel_i(2) * dt;
 
 						/* protection against flipping on ground when landing */
+                        //ghm1: > 0, da wir im NED sind, nach oben negativ
 						if (thrust_int(2) > 0.0f) {
 							thrust_int(2) = 0.0f;
 						}
 					}
 
+                    /****************************************************************************/
 					/* calculate attitude setpoint from thrust vector */
+                    /*ghm1: hier beginnt der im paper beschriebene controller, bzw. schon, als der thust berechnet wurde aber hier offensichtlich*/
 					if (_control_mode.flag_control_velocity_enabled) {
 						/* desired body_z axis = -normalize(thrust_vector) */
+                        //ghm1: bestimmung der lage der body frame achsen. jeweils ein vektor pro body achse
 						math::Vector<3> body_x;
 						math::Vector<3> body_y;
 						math::Vector<3> body_z;
 
+                        //Ghm1: länge des thurst vektors grösser als eine kleine zahl
 						if (thrust_abs > SIGMA) {
+                            //ghm1: unser thrust setpoint vektor zeigt grundsätzlich in richtung der body z-achse (paper)
 							body_z = -thrust_sp / thrust_abs;
 
 						} else {
@@ -1457,10 +1581,13 @@ MulticopterPositionControl::task_main()
 						}
 
 						/* vector of desired yaw direction in XY plane, rotated by PI/2 */
+                        //ghm1: die y-achse im intermediate frame C ergibt sich aus dem yaw winkel zwischen bodyframe und NED frame (paper)
 						math::Vector<3> y_C(-sinf(_att_sp.yaw_body), cosf(_att_sp.yaw_body), 0.0f);
 
 						if (fabsf(body_z(2)) > SIGMA) {
 							/* desired body_x axis, orthogonal to body_z */
+                            //ghm1: %-operator überladen -> kreuzprodukt
+                            //y_C x body_z => x-achse
 							body_x = y_C % body_z;
 
 							/* keep nose to front while inverted upside down */
@@ -1478,6 +1605,7 @@ MulticopterPositionControl::task_main()
 						}
 
 						/* desired body_y axis */
+                        //ghm1: y-achse ist jetzt durch kreuzprodukt aus den beiden anderen zu ermittlen
 						body_y = body_z % body_x;
 
 						/* fill rotation matrix */
