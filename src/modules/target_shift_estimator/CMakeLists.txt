@@ -35,6 +35,7 @@ px4_add_module(
 	MAIN target_shift_estimator
 	SRCS
 		target_shift_estimator.cpp
+		TargetShiftEstimator.cpp
 	DEPENDS
 		platforms__common
 	)
