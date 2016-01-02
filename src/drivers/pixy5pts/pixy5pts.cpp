@@ -48,6 +48,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
+#include <math.h>
 
 #include <drivers/boards/px4fmu-v2/board_config.h>
 #include <drivers/device/i2c.h>
@@ -71,10 +72,12 @@
 #define PIXY5PTS_RESYNC		0x5500
 #define PIXY5PTS_ADJUST		0xAA
 
-#define PIXY5PTS_CENTER_X				159			// the x-axis center pixel position
-#define PIXY5PTS_CENTER_Y				99			// the y-axis center pixel position
-#define PIXY5PTS_PIXELS_PER_RADIAN_X	307.9075f	// x-axis pixel to radian scaler assuming 60deg FOV on x-axis
-#define PIXY5PTS_PIXELS_PER_RADIAN_Y	326.4713f	// y-axis pixel to radian scaler assuming 35deg FOV on y-axis
+#define PIXY5PTS_CENTER_X				160.44f			// the x-axis center pixel position
+#define PIXY5PTS_CENTER_Y				100.75f		// the y-axis center pixel position
+#define PIXY5PTS_FOCAL_X                323.70584f       // focal length in x-direction
+#define PIXY5PTS_FOCAL_Y                324.26201f       // focal length in y-direction
+#define PIXY5PTS_P1                     0.5084f          // coefficient for undistortion for 3rd degree
+#define PIXY5PTS_P3                     0.9970f          // coefficient for undistortion for 1st degree
 
 #ifndef CONFIG_SCHED_WORKQUEUE
 # error This requires CONFIG_SCHED_WORKQUEUE.
@@ -376,12 +379,17 @@ int PIXY5PTS::read_device()
 
             unsigned count = 0;
             //convert to ned
-            float xCoord = block.angle_x;
-            float yCoord = block.angle_y;
+            float x_norm = (block.angle_x - PIXY5PTS_CENTER_X) / PIXY5PTS_FOCAL_X;
+            float y_norm = (block.angle_y - PIXY5PTS_CENTER_Y) / PIXY5PTS_FOCAL_Y;
+            //conversion to polar coordinates
+            float phi = atan2f(y_norm, x_norm);
+            float r_dist_sq = x_norm * x_norm + y_norm * y_norm;
+            float r_dist = sqrtf(r_dist_sq);
+            float r_undist = PIXY5PTS_P1 * r_dist_sq * r_dist + PIXY5PTS_P3 * r_dist;
 
             //set to report
-            report.x_coord[count] = xCoord;
-            report.y_coord[count] = yCoord;
+            report.x_coord[count] = r_undist * cosf(phi);
+            report.y_coord[count] = r_undist * sinf(phi);
 
             //counter increment
             count++;
