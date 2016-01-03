@@ -128,16 +128,16 @@ private:
 /** global pointer for single PIXY5PTS sensor **/
 namespace
 {
-PIXY5PTS *g_irlock = nullptr;
+PIXY5PTS *g_pixy5pts = nullptr;
 }
 
-void irlock_usage();
+void pixy5pts_usage();
 
 extern "C" __EXPORT int pixy5pts_main(int argc, char *argv[]);
 
 /** constructor **/
 PIXY5PTS::PIXY5PTS(int bus, int address) :
-    I2C("irlock", PIXY5PTS0_DEVICE_PATH, bus, address, 400000),
+    I2C("pixy5pts", PIXY5PTS0_DEVICE_PATH, bus, address, 400000),
 	_reports(nullptr),
 	_sensor_ok(false),
     _read_failures(0),
@@ -201,8 +201,8 @@ int PIXY5PTS::probe()
 /** display driver info **/
 int PIXY5PTS::info()
 {
-	if (g_irlock == nullptr) {
-		errx(1, "irlock device driver is not running");
+    if (g_pixy5pts == nullptr) {
+        errx(1, "pixy5pts device driver is not running");
 	}
 
 	/** display reports in queue **/
@@ -221,8 +221,8 @@ int PIXY5PTS::info()
 int PIXY5PTS::test()
 {
 	/** exit immediately if driver not running **/
-	if (g_irlock == nullptr) {
-		errx(1, "irlock device driver is not running");
+    if (g_pixy5pts == nullptr) {
+        errx(1, "pixy5pts device driver is not running");
 	}
 
 	/** exit immediately if sensor is not healty **/
@@ -277,8 +277,8 @@ void PIXY5PTS::cycle_trampoline(void *arg)
 {
     PIXY5PTS *device = (PIXY5PTS *)arg;
 
-	/** check global irlock reference and cycle **/
-	if (g_irlock != nullptr) {
+    /** check global pixy5pts reference and cycle **/
+    if (g_pixy5pts != nullptr) {
 		device->cycle();
 	}
 }
@@ -404,14 +404,14 @@ int PIXY5PTS::read_device()
             orb_publish(ORB_ID(camera_pixy5pts), _camera_pixy5pts_topic, &report);
         }
 
-        //debug output
-        warnx("new report with %d points, time %lld", report.count, report.timestamp);
-        for(unsigned i=0; i<num_objects; ++i)
-        {
-            warnx("x:%4.3f y:%4.3f",
-                  (double)report.x_coord[i],
-                  (double)report.y_coord[i]);
-        }
+//        //debug output
+//        warnx("new report with %d points, time %lld", report.count, report.timestamp);
+//        for(unsigned i=0; i<num_objects; ++i)
+//        {
+//            warnx("x:%4.3f y:%4.3f",
+//                  (double)report.x_coord[i],
+//                  (double)report.y_coord[i]);
+//        }
     }
 
     return OK;
@@ -468,7 +468,7 @@ int PIXY5PTS::read_device_block(struct pixy5pts_s *block)
 	return status;
 }
 
-void irlock_usage()
+void pixy5pts_usage()
 {
 	warnx("missing command: try 'start', 'stop', 'info', 'test'");
 	warnx("options:");
@@ -485,7 +485,7 @@ int pixy5pts_main(int argc, char *argv[])
 	}
 
 	if (optind >= argc) {
-		irlock_usage();
+        pixy5pts_usage();
 		exit(1);
 	}
 
@@ -494,22 +494,22 @@ int pixy5pts_main(int argc, char *argv[])
 	/** start driver **/
 	if (!strcmp(command, "start")) {
         /* test nullpointer if already initialized */
-		if (g_irlock != nullptr) {
+        if (g_pixy5pts != nullptr) {
 			errx(1, "driver has already been started");
 		}
 
 		/** instantiate global instance **/
-        g_irlock = new PIXY5PTS(i2cdevice, PIXY5PTS_I2C_ADDRESS);
+        g_pixy5pts = new PIXY5PTS(i2cdevice, PIXY5PTS_I2C_ADDRESS);
 
-		if (g_irlock == nullptr) {
+        if (g_pixy5pts == nullptr) {
 			errx(1, "failed to allocated memory for driver");
 		}
 
 		/** initialise global instance **/
-		if (g_irlock->init() != OK) {
-            PIXY5PTS *tmp_irlock = g_irlock;
-			g_irlock = nullptr;
-			delete tmp_irlock;
+        if (g_pixy5pts->init() != OK) {
+            PIXY5PTS *tmp_pixy5pts = g_pixy5pts;
+            g_pixy5pts = nullptr;
+            delete tmp_pixy5pts;
 			errx(1, "failed to initialize device, stopping driver");
 		}
 
@@ -517,34 +517,34 @@ int pixy5pts_main(int argc, char *argv[])
 	}
 
 	/** need the driver past this point **/
-	if (g_irlock == nullptr) {
+    if (g_pixy5pts == nullptr) {
 		warnx("not started");
-		irlock_usage();
+        pixy5pts_usage();
 		exit(1);
 	}
 
 	/** stop the driver **/
 	if (!strcmp(command, "stop")) {
-        PIXY5PTS *tmp_irlock = g_irlock;
-		g_irlock = nullptr;
-		delete tmp_irlock;
-		warnx("irlock stopped");
+        PIXY5PTS *tmp_pixy5pts = g_pixy5pts;
+        g_pixy5pts = nullptr;
+        delete tmp_pixy5pts;
+        warnx("pixy5pts stopped");
 		exit(OK);
 	}
 
 	/** Print driver information **/
 	if (!strcmp(command, "info")) {
-		g_irlock->info();
+        g_pixy5pts->info();
 		exit(OK);
 	}
 
 	/** test driver **/
 	if (!strcmp(command, "test")) {
-		g_irlock->test();
+        g_pixy5pts->test();
 		exit(OK);
 	}
 
 	/** display usage info **/
-	irlock_usage();
+    pixy5pts_usage();
 	exit(0);
 }

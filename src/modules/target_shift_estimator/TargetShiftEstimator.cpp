@@ -1,16 +1,33 @@
+#include <px4_config.h>
+#include <px4_defines.h>
+#include <px4_tasks.h>
+#include <px4_posix.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <errno.h>
-
+#include <math.h>
+#include <poll.h>
+#include <functional>
+#include <drivers/drv_hrt.h>
+#include <arch/board/board.h>
+#include <vector>
+#include <algorithm>
 #include <px4_config.h>
 #include <nuttx/sched.h>
+#include <math.h>
 
 #include <systemlib/systemlib.h>
-#include <systemlib/err.h>
+#include <mathlib/mathlib.h>
+#include <lib/geo/geo.h>
+#include <mavlink/mavlink_log.h>
+#include <platforms/px4_defines.h>
 
 #include "TargetShiftEstimator.hpp"
+
+#define TARGET_DISTANCE_L_R 0.3f
 
 using namespace shift_estimator;
 
@@ -25,9 +42,14 @@ TargetShiftEstimator* instance;
 
 TargetShiftEstimator::TargetShiftEstimator()
     : _task_should_exit(false),
-      _control_task(-1)
+      _control_task(-1),
+      /* subscriptions */
+      _local_pos_sub(-1),
+      _pixy5pts_sub(-1),
+      _ctrl_state_sub(-1)
 {
-
+    memset(&_ctrl_state, 0, sizeof(_ctrl_state));
+    memset(&_local_pos, 0, sizeof(_local_pos));
 }
 
 TargetShiftEstimator::~TargetShiftEstimator()
@@ -85,17 +107,195 @@ void
 TargetShiftEstimator::task_main()
 {
     warnx("[target_shift_estimator] starting\n");
+    //subscribe to topics an make a first poll
+    make_subscriptions();
+    poll_subscriptions();
 
     while (!_task_should_exit) {
-        warnx("Hello target_shift_estimator!\n");
-        sleep(20);
+        //check if we have new messages on topics
+        poll_subscriptions();
+        calculateTargetToCameraShift();
 
-        //parameter update
-        //poll subscribtions
-        //main loop while schleife
+        //ouput example values
+        //warnx("local position x: %.2f", (double)_local_pos.x );
+        //warnx("roll: %.2f", (double)euler_angles(0) );
+        warnx("pixy5pts: %d", _pixy5pts.count );
+        warnx("pixy5pts: %.2f", (double)_pixy5pts.x_coord[0] );
+        warnx("pixy5pts: %.2f", (double)_pixy5pts.y_coord[0] );
+
+        sleep(1);
+
+        //warnx("[target_shift_estimator] running\n");
     }
 
-    warnx("[target_shift_estimator] exiting.\n");
 
+    warnx("[target_shift_estimator] exiting.\n");
     _control_task = -1;
+}
+
+void
+TargetShiftEstimator::make_subscriptions()
+{
+    //attitude from attitude controller
+    _ctrl_state_sub = orb_subscribe(ORB_ID(control_state));
+    _pixy5pts_sub = orb_subscribe(ORB_ID(camera_pixy5pts));
+    _local_pos_sub = orb_subscribe(ORB_ID(vehicle_local_position));
+}
+
+void
+TargetShiftEstimator::poll_subscriptions()
+{
+    bool updated = false;
+
+    orb_check(_ctrl_state_sub, &updated);
+
+    if (updated) {
+        //warnx("control_state updated");
+        orb_copy(ORB_ID(control_state), _ctrl_state_sub, &_ctrl_state);
+    }
+
+    orb_check(_local_pos_sub, &updated);
+
+    if (updated) {
+        //warnx("vehicle_local_position updated");
+        orb_copy(ORB_ID(vehicle_local_position), _local_pos_sub, &_local_pos);
+    }
+
+    orb_check(_pixy5pts_sub, &updated);
+
+    if (updated) {
+        warnx("camera_pixy5pts updated");
+        orb_copy(ORB_ID(camera_pixy5pts), _pixy5pts_sub, &_pixy5pts);
+    }
+}
+
+float TargetShiftEstimator::ptDistance(const math::Vector<3> &pt1, const math::Vector<3> &pt2)
+{
+    math::Vector<3> diff = pt1-pt2;
+    return sqrt(diff(1)*diff(1) + diff(2)*diff(2) +  diff(3)*diff(3));
+}
+
+void
+TargetShiftEstimator::calculateTargetToCameraShift()
+{
+    if(_pixy5pts.count == 4)
+    {
+        //rotate points into orthogonal camera (timestamps should be similar)
+        math::Quaternion q_att(_ctrl_state.q[0], _ctrl_state.q[1], _ctrl_state.q[2], _ctrl_state.q[3]);
+        math::Matrix<3, 3> R = q_att.to_dcm();
+
+        std::vector<math::Vector<3>> rotPts(4);
+        math::Vector<3> pt;
+        for(unsigned i=0; i<_pixy5pts.count; ++i)
+        {
+            pt(0) = _pixy5pts.x_coord[i];
+            pt(1) = _pixy5pts.y_coord[i];
+            pt(2) = 1.0;
+            //todo: ??? ist die rotation korrekt oder matrix invertieren????
+            pt = R * pt;
+            rotPts.push_back(pt);
+        }
+
+        //identify points by sorting
+        identifyTargetPoints(rotPts);
+
+        if(_target.valid)
+        {
+            //calculate heigth above target
+            float heightAboveTarget = TARGET_DISTANCE_L_R / _target.distLR;
+            //calculate x/y-position offset to target
+            math::Vector<3> pos_xy = _target.M * heightAboveTarget;
+        }
+    }
+}
+
+bool
+TargetShiftEstimator::targetCompare(const Target& lhs, const Target& rhs)
+{
+    return lhs.distM < rhs.distM;
+}
+
+void
+TargetShiftEstimator::identifyTargetPoints( std::vector<math::Vector<3>>& rotPts )
+{
+    std::vector<Target> targetCandidates;
+    ptsToLineProjection( rotPts.at(0), rotPts.at(1), rotPts.at(2), rotPts.at(3), targetCandidates );
+    ptsToLineProjection( rotPts.at(0), rotPts.at(2), rotPts.at(1), rotPts.at(3), targetCandidates );
+    ptsToLineProjection( rotPts.at(0), rotPts.at(3), rotPts.at(1), rotPts.at(2), targetCandidates );
+    ptsToLineProjection( rotPts.at(1), rotPts.at(2), rotPts.at(0), rotPts.at(3), targetCandidates );
+    ptsToLineProjection( rotPts.at(1), rotPts.at(3), rotPts.at(0), rotPts.at(2), targetCandidates );
+    ptsToLineProjection( rotPts.at(2), rotPts.at(3), rotPts.at(0), rotPts.at(1), targetCandidates );
+    //sort list according to smallest
+    std::sort(targetCandidates.begin(), targetCandidates.end(), targetCompare);
+    if( targetCandidates.size())
+    {
+        _target = targetCandidates.at(0);
+        _target.valid = true;
+        //calculate distance between left and right target point
+        _target.distLR = ptDistance( _target.L, _target.R );
+    }
+}
+
+void
+TargetShiftEstimator::ptsToLineProjection(const math::Vector<3>& L1, const math::Vector<3>& L2,
+                                          const math::Vector<3>& P1, const math::Vector<3>& P2,
+                                          std::vector<Target>& targetCandidates )
+{
+    //line from L1 to L2
+    math::Vector<3> u = L2 - L1;
+    float uSq = u * u;
+
+    //projection of first point
+    float lambda = (P1 - L1) * u / uSq;
+    //test, if projected point is on line between L1 and L2
+    if( lambda > 1.0f || lambda < 0.0f )
+        return;
+    //calculate projected point
+    math::Vector<3> projP1 = L1 + u * lambda;
+    //calculate line to point distance
+    float distP1 = ptDistance(projP1, P1);
+
+    //projection of second point
+    lambda = (P2 - L1) * u / uSq;
+    //test, if projected point is on line between L1 and L2
+    if( lambda > 1.0f || lambda < 0.0f )
+        return;
+    //calculate projected point
+    math::Vector<3> projP2 = L1 + u * lambda;
+    //calculate line to point distance
+    float distP2 = ptDistance(projP2, P2);
+
+    Target cand;
+    //find middle and direction point
+    if(distP1 < distP2)
+    {
+        //P1 lies neared to line and could be M in an valid target
+        cand.M = P1;
+        cand.distM = distP1;
+        cand.F = P2;
+        cand.distF = distP2;
+    }
+    else
+    {
+        //P2 lies neared to line and could be M in an valid target
+        cand.M = P2;
+        cand.distM = distP2;
+        cand.F = P1;
+        cand.distF = distP1;
+    }
+
+    //find left and right point (under the precondition, that the other points are ordered correctly)
+    float t = (L1(0)-cand.M(0))*(cand.F(1)-cand.M(1)) - (L1(1)-cand.M(1))*(cand.F(0)-cand.M(0));
+    if( t > 0.0f )
+    {
+        cand.L = L1;
+        cand.R = L2;
+    }
+    else
+    {
+        cand.L = L2;
+        cand.R = L1;
+    }
+
+    targetCandidates.push_back(cand);
 }
