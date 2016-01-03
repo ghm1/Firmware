@@ -87,7 +87,7 @@ namespace shift_estimator
         void        calculateTargetToCameraShift();
         void        identifyTargetPoints(std::vector<math::Vector<3>>& rotPts);
         float       ptDistance(const math::Vector<3> &pt1, const math::Vector<3> &pt2);
-        void        ptsToLineProjection(const math::Vector<3>& L1, const math::Vector<3>& L2,
+        void        findTargetCandidate(const math::Vector<3>& L1, const math::Vector<3>& L2,
                                                   const math::Vector<3>& P1, const math::Vector<3>& P2,
                                                   std::vector<Target>& targetCandidates );
 

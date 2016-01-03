@@ -169,12 +169,6 @@ TargetShiftEstimator::poll_subscriptions()
     }
 }
 
-float TargetShiftEstimator::ptDistance(const math::Vector<3> &pt1, const math::Vector<3> &pt2)
-{
-    math::Vector<3> diff = pt1-pt2;
-    return sqrt(diff(1)*diff(1) + diff(2)*diff(2) +  diff(3)*diff(3));
-}
-
 void
 TargetShiftEstimator::calculateTargetToCameraShift()
 {
@@ -191,7 +185,7 @@ TargetShiftEstimator::calculateTargetToCameraShift()
             pt(0) = _pixy5pts.x_coord[i];
             pt(1) = _pixy5pts.y_coord[i];
             pt(2) = 1.0;
-            //todo: ??? ist die rotation korrekt oder matrix invertieren????
+            //1. todo: ??? ist die rotation korrekt oder matrix invertieren????
             pt = R * pt;
             rotPts.push_back(pt);
         }
@@ -209,24 +203,37 @@ TargetShiftEstimator::calculateTargetToCameraShift()
     }
 }
 
-bool
-TargetShiftEstimator::targetCompare(const Target& lhs, const Target& rhs)
-{
-    return lhs.distM < rhs.distM;
-}
-
 void
 TargetShiftEstimator::identifyTargetPoints( std::vector<math::Vector<3>>& rotPts )
 {
+    //We search for a target with the following shape: L = left, M = middle, R = right, F = direction point
+    //************************************************
+    //******************* F **************************
+    //************************************************
+    //************************************************
+    //********* L ******* M ******* R ****************
+    //************************************************
+    //We try to identify the correct target by building a line between two of the four points assuming that these two
+    //points are the targets L and R points. For the real target M lies on the line between L and R. Among all target
+    //candidates it should be sufficient to identify the target candidate, where M projects between L and R and the
+    //orthogonal distance of M to line LR is the shortest among all target candidates.
+    //So it is a necessary condition for a valid target candidate, that F and M project
+    //on the line segment between R and L. Moreover we calculate the orthogonal distance of M to L-R;
+    //Finally the target candidates are sorted by their M to Line-LR distance. The searched target
+    //is the one with the shortest distance.
+
     std::vector<Target> targetCandidates;
-    ptsToLineProjection( rotPts.at(0), rotPts.at(1), rotPts.at(2), rotPts.at(3), targetCandidates );
-    ptsToLineProjection( rotPts.at(0), rotPts.at(2), rotPts.at(1), rotPts.at(3), targetCandidates );
-    ptsToLineProjection( rotPts.at(0), rotPts.at(3), rotPts.at(1), rotPts.at(2), targetCandidates );
-    ptsToLineProjection( rotPts.at(1), rotPts.at(2), rotPts.at(0), rotPts.at(3), targetCandidates );
-    ptsToLineProjection( rotPts.at(1), rotPts.at(3), rotPts.at(0), rotPts.at(2), targetCandidates );
-    ptsToLineProjection( rotPts.at(2), rotPts.at(3), rotPts.at(0), rotPts.at(1), targetCandidates );
-    //sort list according to smallest
+    //try to find target candidates and add them to targetCandidates vector
+    findTargetCandidate( rotPts.at(0), rotPts.at(1), rotPts.at(2), rotPts.at(3), targetCandidates );
+    findTargetCandidate( rotPts.at(0), rotPts.at(2), rotPts.at(1), rotPts.at(3), targetCandidates );
+    findTargetCandidate( rotPts.at(0), rotPts.at(3), rotPts.at(1), rotPts.at(2), targetCandidates );
+    findTargetCandidate( rotPts.at(1), rotPts.at(2), rotPts.at(0), rotPts.at(3), targetCandidates );
+    findTargetCandidate( rotPts.at(1), rotPts.at(3), rotPts.at(0), rotPts.at(2), targetCandidates );
+    findTargetCandidate( rotPts.at(2), rotPts.at(3), rotPts.at(0), rotPts.at(1), targetCandidates );
+
+    //sort list according to smallest M to L-R distance
     std::sort(targetCandidates.begin(), targetCandidates.end(), targetCompare);
+
     if( targetCandidates.size())
     {
         _target = targetCandidates.at(0);
@@ -237,17 +244,17 @@ TargetShiftEstimator::identifyTargetPoints( std::vector<math::Vector<3>>& rotPts
 }
 
 void
-TargetShiftEstimator::ptsToLineProjection(const math::Vector<3>& L1, const math::Vector<3>& L2,
+TargetShiftEstimator::findTargetCandidate(const math::Vector<3>& L1, const math::Vector<3>& L2,
                                           const math::Vector<3>& P1, const math::Vector<3>& P2,
                                           std::vector<Target>& targetCandidates )
 {
-    //line from L1 to L2
+    //direction vector u from L1 to L2
     math::Vector<3> u = L2 - L1;
     float uSq = u * u;
 
     //projection of first point
     float lambda = (P1 - L1) * u / uSq;
-    //test, if projected point is on line between L1 and L2
+    //test, if projected point is on line between L1 and L2 (L and R)
     if( lambda > 1.0f || lambda < 0.0f )
         return;
     //calculate projected point
@@ -257,7 +264,7 @@ TargetShiftEstimator::ptsToLineProjection(const math::Vector<3>& L1, const math:
 
     //projection of second point
     lambda = (P2 - L1) * u / uSq;
-    //test, if projected point is on line between L1 and L2
+    //test, if projected point is on line between L1 and L2 (L and R)
     if( lambda > 1.0f || lambda < 0.0f )
         return;
     //calculate projected point
@@ -269,7 +276,7 @@ TargetShiftEstimator::ptsToLineProjection(const math::Vector<3>& L1, const math:
     //find middle and direction point
     if(distP1 < distP2)
     {
-        //P1 lies neared to line and could be M in an valid target
+        //P1 lies nearer to line and could be M in an valid target
         cand.M = P1;
         cand.distM = distP1;
         cand.F = P2;
@@ -277,7 +284,7 @@ TargetShiftEstimator::ptsToLineProjection(const math::Vector<3>& L1, const math:
     }
     else
     {
-        //P2 lies neared to line and could be M in an valid target
+        //P2 lies nearer to line and could be M in an valid target
         cand.M = P2;
         cand.distM = distP2;
         cand.F = P1;
@@ -299,3 +306,18 @@ TargetShiftEstimator::ptsToLineProjection(const math::Vector<3>& L1, const math:
 
     targetCandidates.push_back(cand);
 }
+
+float TargetShiftEstimator::ptDistance(const math::Vector<3> &pt1, const math::Vector<3> &pt2)
+{
+    math::Vector<3> diff = pt1-pt2;
+    return sqrt(diff(0)*diff(0) + diff(1)*diff(1) +  diff(2)*diff(2));
+}
+
+bool
+TargetShiftEstimator::targetCompare(const Target& lhs, const Target& rhs)
+{
+    return lhs.distM < rhs.distM;
+}
+
+
+
