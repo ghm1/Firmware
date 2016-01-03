@@ -27,7 +27,7 @@
 
 #include "TargetShiftEstimator.hpp"
 
-#define TARGET_DISTANCE_L_R 0.3f
+#define TARGET_DISTANCE_L_R 2.0f
 
 using namespace shift_estimator;
 
@@ -47,8 +47,7 @@ TargetShiftEstimator::TargetShiftEstimator()
       _local_pos_sub(-1),
       _pixy5pts_sub(-1),
       _ctrl_state_sub(-1),
-      _test(false),
-      _rotPts(4)
+      _test(false)
 {
     memset(&_ctrl_state, 0, sizeof(_ctrl_state));
     memset(&_local_pos, 0, sizeof(_local_pos));
@@ -109,27 +108,90 @@ void
 TargetShiftEstimator::task_main()
 {
     warnx("[target_shift_estimator] starting\n");
-    //subscribe to topics an make a first poll
-    make_subscriptions();
-    poll_subscriptions();
 
-    while (!_task_should_exit) {
-        //check if we have new messages on topics
+    if(!_test)
+    {
+        //subscribe to topics an make a first poll
+        make_subscriptions();
         poll_subscriptions();
+
+        /* wakeup source */
+        px4_pollfd_struct_t fds[1];
+
+        fds[0].fd = _pixy5pts_sub;
+        fds[0].events = POLLIN;
+
+        while (!_task_should_exit)
+        {
+            /* wait for up to 500ms for data */
+            int pret = px4_poll(&fds[0], (sizeof(fds) / sizeof(fds[0])), 500);
+
+            /* timed out - periodic check for _task_should_exit */
+            if (pret == 0) {
+                continue;
+            }
+
+            /* this is undesirable but not much we can do */
+            if (pret < 0) {
+                warn("poll error %d, %d", pret, errno);
+                continue;
+            }
+
+            //check if we have new messages on topics
+            poll_subscriptions();
+
+            int count = _pixy5pts.count;
+            for(unsigned i=0; i < count; i++ )
+            {
+                warnx("pixy5pts %d: %.2f", i, (double)_pixy5pts.x_coord[i] );
+                warnx("pixy5pts %d: %.2f", i, (double)_pixy5pts.y_coord[i] );
+            }
+
+            //do calculation
+            calculateTargetToCameraShift();
+        }
+    }
+    else
+    {
+        //this is a test!
+
+        //do calculation
         calculateTargetToCameraShift();
 
-        //ouput example values
-        //warnx("local position x: %.2f", (double)_local_pos.x );
-        //warnx("roll: %.2f", (double)euler_angles(0) );
-        warnx("pixy5pts: %d", _pixy5pts.count );
-        warnx("pixy5pts: %.2f", (double)_pixy5pts.x_coord[0] );
-        warnx("pixy5pts: %.2f", (double)_pixy5pts.y_coord[0] );
+        warnx("Rotated points: %d", _rotPts.size());
+        for( unsigned i=0; i < _rotPts.size(); ++i )
+        {
+            math::Vector<3> pt = _rotPts.at(i);
+            warnx("Pt %d: x= %.2f, y= %.2f, z=%.2f ", i, (double)pt(0), (double)pt(1), (double)pt(3) );
+        }
+
+        //ouput target candidates
+        warnx("Target candidates: %d", _targetCandidates.size());
+        for( unsigned i=0; i < _targetCandidates.size(); ++i )
+        {
+            Target t = _targetCandidates.at(i);
+            warnx("Candidate %d:", i);
+            warnx("L: x= %.2f, y= %.2f, z=%.2f ", (double)t.L(0), (double)t.L(1), (double)t.L(3) );
+            warnx("R: x= %.2f, y= %.2f, z=%.2f ", (double)t.R(0), (double)t.R(1), (double)t.R(3) );
+            warnx("M: x= %.2f, y= %.2f, z=%.2f ", (double)t.M(0), (double)t.M(1), (double)t.M(3) );
+            warnx("F: x= %.2f, y= %.2f, z=%.2f ", (double)t.F(0), (double)t.F(1), (double)t.F(3) );
+            warnx("distM: %.2f", (double)t.distM);
+            warnx("distF: %.2f", (double)t.distF);
+            warnx("distLR: %.2f", (double)t.distLR);
+            warnx("valid: %.2f", (double)t.valid);
+        }
+
+        warnx("target.valid: %d", (int)_target.valid );
+        if(_target.valid)
+        {
+            warnx("distLR: %.2f", (double)_target.distLR);
+            warnx("_shift_xyz: x= %.2f, y= %.2f, z=%.2f ", (double)_shift_xyz(0), (double)_shift_xyz(1), (double)_shift_xyz(2) );
+        }
+
+        _task_should_exit = true;
 
         sleep(1);
-
-        //warnx("[target_shift_estimator] running\n");
     }
-
 
     warnx("[target_shift_estimator] exiting.\n");
     _control_task = -1;
@@ -179,7 +241,11 @@ TargetShiftEstimator::calculateTargetToCameraShift()
         //rotate points into orthogonal camera (timestamps should be similar)
         math::Quaternion q_att(_ctrl_state.q[0], _ctrl_state.q[1], _ctrl_state.q[2], _ctrl_state.q[3]);
         math::Matrix<3, 3> R = q_att.to_dcm();
+        warnx("%.2f %.2f %.2f", (double)R(0,0), (double)R(0,1), (double)R(0,2));
+        warnx("%.2f %.2f %.2f", (double)R(1,0), (double)R(1,1), (double)R(1,2));
+        warnx("%.2f %.2f %.2f", (double)R(2,0), (double)R(2,1), (double)R(2,2));
 
+        warnx("rotated points");
         math::Vector<3> pt;
         for(unsigned i=0; i<_pixy5pts.count; ++i)
         {
@@ -188,7 +254,13 @@ TargetShiftEstimator::calculateTargetToCameraShift()
             pt(2) = 1.0;
             //1. todo: ??? ist die rotation korrekt oder matrix invertieren????
             pt = R * pt;
+            //to normalized image coordinates
+            pt(0) = pt(0) / pt(2);
+            pt(1) = pt(1) / pt(2);
+            pt(2) = 1.0;
+
             _rotPts.push_back(pt);
+            warnx("Pt %.2f %.2f %.2f", (double)pt(0), (double)pt(1), (double)pt(2));
         }
 
         //identify points by sorting
@@ -255,6 +327,7 @@ TargetShiftEstimator::findTargetCandidate(const math::Vector<3>& L1, const math:
 
     //projection of first point
     float lambda = (P1 - L1) * u / uSq;
+    warnx("lambda: %.2f", (double)lambda);
     //test, if projected point is on line between L1 and L2 (L and R)
     if( lambda > 1.0f || lambda < 0.0f )
         return;
@@ -265,6 +338,7 @@ TargetShiftEstimator::findTargetCandidate(const math::Vector<3>& L1, const math:
 
     //projection of second point
     lambda = (P2 - L1) * u / uSq;
+    warnx("lambda: %.2f", (double)lambda);
     //test, if projected point is on line between L1 and L2 (L and R)
     if( lambda > 1.0f || lambda < 0.0f )
         return;
@@ -321,37 +395,12 @@ TargetShiftEstimator::targetCompare(const Target& lhs, const Target& rhs)
 }
 
 bool
-TargetShiftEstimator::makeTest( const struct camera_pixy5pts_s& testPts,
+TargetShiftEstimator::initTest( const struct camera_pixy5pts_s& testPts,
                                 const struct control_state_s& test_ctrl_state )
 {
-    //this is a test, make debug outputs
     _test = true;
     _pixy5pts = testPts;
     _ctrl_state = test_ctrl_state;
-    calculateTargetToCameraShift();
-    //ouput rotated points
-    warnx("Rotated points:");
-    for( unsigned i=0; i < _rotPts.size(); ++i )
-    {
-        math::Vector<3> pt = _rotPts.at(i);
-        warnx("Pt %d: x= %.2f, y= %.2f, z=%.2f ", i, (double)pt(0), (double)pt(1), (double)pt(3) );
-    }
-
-    //ouput target candidates
-    warnx("Target candidates:");
-    for( unsigned i=0; i < _rotPts.size(); ++i )
-    {
-        Target t = _targetCandidates.at(i);
-        warnx("Candidate %d:", i);
-        warnx("L: x= %.2f, y= %.2f, z=%.2f ", (double)t.L(0), (double)t.L(1), (double)t.L(3) );
-        warnx("R: x= %.2f, y= %.2f, z=%.2f ", (double)t.R(0), (double)t.R(1), (double)t.R(3) );
-        warnx("M: x= %.2f, y= %.2f, z=%.2f ", (double)t.M(0), (double)t.M(1), (double)t.M(3) );
-        warnx("F: x= %.2f, y= %.2f, z=%.2f ", (double)t.F(0), (double)t.F(1), (double)t.F(3) );
-        warnx("distM: %.2f", (double)t.distM);
-        warnx("distF: %.2f", (double)t.distF);
-        warnx("distLR: %.2f", (double)t.distLR);
-        warnx("valid: %.2f", (double)t.valid);
-    }
 
     return OK;
 }

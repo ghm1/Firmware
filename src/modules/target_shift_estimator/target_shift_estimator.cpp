@@ -76,22 +76,36 @@ namespace shift_estimator {
 
 bool makeTest()
 {
-    shift_estimator::TargetShiftEstimator estimator;
-
     struct camera_pixy5pts_s testPts;
     testPts.count = 4;
     testPts.timestamp = hrt_absolute_time();
     //add points
-    //...
+//    testPts.x_coord[0] = -0.3006;
+//    testPts.y_coord[0] = -0.2003;
+//    testPts.x_coord[1] = -0.1000;
+//    testPts.y_coord[1] = -0.2000;
+//    testPts.x_coord[2] = -0.3005;
+//    testPts.y_coord[2] = -0.0000;
+//    testPts.x_coord[3] = -0.4998;
+//    testPts.y_coord[3] = -0.1998;
+    testPts.x_coord[0] = -0.1671;
+    testPts.y_coord[0] = -0.1075;
+    testPts.x_coord[1] = 0.0238;
+    testPts.y_coord[1] = -0.1098;
+    testPts.x_coord[2] = -0.1719;
+    testPts.y_coord[2] = 0.0850;
+    testPts.x_coord[3] = -0.3500;
+    testPts.y_coord[3] = -0.1052;
 
     struct control_state_s test_ctrl_state;
-    math::Quaternion q;
+    //math::Quaternion q(1, 0, 0, 0);
+    math::Quaternion q(0.99718, 0.043538, -0.06099, -0.0026629);
     test_ctrl_state.q[0] = q(0);
     test_ctrl_state.q[1] = q(1);
     test_ctrl_state.q[2] = q(2);
     test_ctrl_state.q[3] = q(3);
 
-    bool success = estimator.makeTest(testPts, test_ctrl_state);
+    bool success = shift_estimator::instance->initTest(testPts, test_ctrl_state);
 
     return success;
 }
@@ -155,7 +169,21 @@ int target_shift_estimator_main(int argc, char *argv[])
             return 0;
 
         } else {
+            shift_estimator::instance = new shift_estimator::TargetShiftEstimator;
+
+            if (shift_estimator::instance == nullptr) {
+                warnx("alloc failed");
+                return 1;
+            }
+
             makeTest();
+            if (OK != shift_estimator::instance->start()) {
+                delete shift_estimator::instance;
+                shift_estimator::instance = nullptr;
+                warnx("start failed");
+                return 1;
+            }
+
             return 1;
         }
     }
