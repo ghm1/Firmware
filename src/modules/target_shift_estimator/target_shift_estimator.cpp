@@ -67,16 +67,39 @@
 #include "TargetShiftEstimator.hpp"
 
 extern "C" __EXPORT int target_shift_estimator_main(int argc, char *argv[]);
+bool makeTest();
 
 namespace shift_estimator {
     //global instance
     TargetShiftEstimator* instance;
 }
 
+bool makeTest()
+{
+    shift_estimator::TargetShiftEstimator estimator;
+
+    struct camera_pixy5pts_s testPts;
+    testPts.count = 4;
+    testPts.timestamp = hrt_absolute_time();
+    //add points
+    //...
+
+    struct control_state_s test_ctrl_state;
+    math::Quaternion q;
+    test_ctrl_state.q[0] = q(0);
+    test_ctrl_state.q[1] = q(1);
+    test_ctrl_state.q[2] = q(2);
+    test_ctrl_state.q[3] = q(3);
+
+    bool success = estimator.makeTest(testPts, test_ctrl_state);
+
+    return success;
+}
+
 int target_shift_estimator_main(int argc, char *argv[])
 {
     if (argc < 2) {
-        warnx("usage: target_shift_estimator {start|stop|status}");
+        warnx("usage: target_shift_estimator {start|stop|status|test}");
         return 1;
     }
 
@@ -122,6 +145,17 @@ int target_shift_estimator_main(int argc, char *argv[])
 
         } else {
             warnx("not running");
+            return 1;
+        }
+    }
+
+    if (!strcmp(argv[1], "test")) {
+        if (shift_estimator::instance) {
+            warnx("already running, please stop first for test");
+            return 0;
+
+        } else {
+            makeTest();
             return 1;
         }
     }

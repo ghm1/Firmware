@@ -50,6 +50,15 @@ namespace shift_estimator
          */
         int		start();
 
+        /**
+         * Test scenario
+         *
+         * @return		OK on success.
+         */
+        bool    makeTest( const struct camera_pixy5pts_s& testPts,
+                          const struct control_state_s& test_ctrl_state );
+
+
     private:
         bool		_task_should_exit;		/**< if true, task should exit */
         int         _control_task;			/**< task handle for task */
@@ -63,6 +72,10 @@ namespace shift_estimator
         struct control_state_s                  _ctrl_state;
 
         struct Target                           _target;
+        bool                                    _test;              //function test active
+        std::vector<math::Vector<3>>            _rotPts;            //vector of points after rotation
+        std::vector<Target>                     _targetCandidates;  //vector of target candidates
+        math::Vector<3>                         _shift_xyz;
 
         /**
          * Shim for calling task_main from task_create.
@@ -85,13 +98,13 @@ namespace shift_estimator
         void        make_subscriptions();
 
         void        calculateTargetToCameraShift();
-        void        identifyTargetPoints(std::vector<math::Vector<3>>& rotPts);
+        void        identifyTargetPoints();
         float       ptDistance(const math::Vector<3> &pt1, const math::Vector<3> &pt2);
         void        findTargetCandidate(const math::Vector<3>& L1, const math::Vector<3>& L2,
-                                                  const math::Vector<3>& P1, const math::Vector<3>& P2,
-                                                  std::vector<Target>& targetCandidates );
+                                                  const math::Vector<3>& P1, const math::Vector<3>& P2 );
 
         static bool        targetCompare(const Target& lhs, const Target& rhs);
+
     };
 
 

@@ -46,7 +46,9 @@ TargetShiftEstimator::TargetShiftEstimator()
       /* subscriptions */
       _local_pos_sub(-1),
       _pixy5pts_sub(-1),
-      _ctrl_state_sub(-1)
+      _ctrl_state_sub(-1),
+      _test(false),
+      _rotPts(4)
 {
     memset(&_ctrl_state, 0, sizeof(_ctrl_state));
     memset(&_local_pos, 0, sizeof(_local_pos));
@@ -178,7 +180,6 @@ TargetShiftEstimator::calculateTargetToCameraShift()
         math::Quaternion q_att(_ctrl_state.q[0], _ctrl_state.q[1], _ctrl_state.q[2], _ctrl_state.q[3]);
         math::Matrix<3, 3> R = q_att.to_dcm();
 
-        std::vector<math::Vector<3>> rotPts(4);
         math::Vector<3> pt;
         for(unsigned i=0; i<_pixy5pts.count; ++i)
         {
@@ -187,24 +188,25 @@ TargetShiftEstimator::calculateTargetToCameraShift()
             pt(2) = 1.0;
             //1. todo: ??? ist die rotation korrekt oder matrix invertieren????
             pt = R * pt;
-            rotPts.push_back(pt);
+            _rotPts.push_back(pt);
         }
 
         //identify points by sorting
-        identifyTargetPoints(rotPts);
+        identifyTargetPoints();
 
         if(_target.valid)
         {
             //calculate heigth above target
-            float heightAboveTarget = TARGET_DISTANCE_L_R / _target.distLR;
+            _shift_xyz(2) = TARGET_DISTANCE_L_R / _target.distLR;
             //calculate x/y-position offset to target
-            math::Vector<3> pos_xy = _target.M * heightAboveTarget;
+            _shift_xyz(0) = _target.M(0) * _shift_xyz(2);
+            _shift_xyz(1) = _target.M(1) * _shift_xyz(2);
         }
     }
 }
 
 void
-TargetShiftEstimator::identifyTargetPoints( std::vector<math::Vector<3>>& rotPts )
+TargetShiftEstimator::identifyTargetPoints()
 {
     //We search for a target with the following shape: L = left, M = middle, R = right, F = direction point
     //************************************************
@@ -222,21 +224,21 @@ TargetShiftEstimator::identifyTargetPoints( std::vector<math::Vector<3>>& rotPts
     //Finally the target candidates are sorted by their M to Line-LR distance. The searched target
     //is the one with the shortest distance.
 
-    std::vector<Target> targetCandidates;
+    _targetCandidates.clear();
     //try to find target candidates and add them to targetCandidates vector
-    findTargetCandidate( rotPts.at(0), rotPts.at(1), rotPts.at(2), rotPts.at(3), targetCandidates );
-    findTargetCandidate( rotPts.at(0), rotPts.at(2), rotPts.at(1), rotPts.at(3), targetCandidates );
-    findTargetCandidate( rotPts.at(0), rotPts.at(3), rotPts.at(1), rotPts.at(2), targetCandidates );
-    findTargetCandidate( rotPts.at(1), rotPts.at(2), rotPts.at(0), rotPts.at(3), targetCandidates );
-    findTargetCandidate( rotPts.at(1), rotPts.at(3), rotPts.at(0), rotPts.at(2), targetCandidates );
-    findTargetCandidate( rotPts.at(2), rotPts.at(3), rotPts.at(0), rotPts.at(1), targetCandidates );
+    findTargetCandidate( _rotPts.at(0), _rotPts.at(1), _rotPts.at(2), _rotPts.at(3) );
+    findTargetCandidate( _rotPts.at(0), _rotPts.at(2), _rotPts.at(1), _rotPts.at(3) );
+    findTargetCandidate( _rotPts.at(0), _rotPts.at(3), _rotPts.at(1), _rotPts.at(2) );
+    findTargetCandidate( _rotPts.at(1), _rotPts.at(2), _rotPts.at(0), _rotPts.at(3) );
+    findTargetCandidate( _rotPts.at(1), _rotPts.at(3), _rotPts.at(0), _rotPts.at(2) );
+    findTargetCandidate( _rotPts.at(2), _rotPts.at(3), _rotPts.at(0), _rotPts.at(1) );
 
     //sort list according to smallest M to L-R distance
-    std::sort(targetCandidates.begin(), targetCandidates.end(), targetCompare);
+    std::sort(_targetCandidates.begin(), _targetCandidates.end(), targetCompare );
 
-    if( targetCandidates.size())
+    if( _targetCandidates.size())
     {
-        _target = targetCandidates.at(0);
+        _target = _targetCandidates.at(0);
         _target.valid = true;
         //calculate distance between left and right target point
         _target.distLR = ptDistance( _target.L, _target.R );
@@ -245,8 +247,7 @@ TargetShiftEstimator::identifyTargetPoints( std::vector<math::Vector<3>>& rotPts
 
 void
 TargetShiftEstimator::findTargetCandidate(const math::Vector<3>& L1, const math::Vector<3>& L2,
-                                          const math::Vector<3>& P1, const math::Vector<3>& P2,
-                                          std::vector<Target>& targetCandidates )
+                                          const math::Vector<3>& P1, const math::Vector<3>& P2 )
 {
     //direction vector u from L1 to L2
     math::Vector<3> u = L2 - L1;
@@ -304,7 +305,7 @@ TargetShiftEstimator::findTargetCandidate(const math::Vector<3>& L1, const math:
         cand.R = L1;
     }
 
-    targetCandidates.push_back(cand);
+    _targetCandidates.push_back(cand);
 }
 
 float TargetShiftEstimator::ptDistance(const math::Vector<3> &pt1, const math::Vector<3> &pt2)
@@ -319,5 +320,40 @@ TargetShiftEstimator::targetCompare(const Target& lhs, const Target& rhs)
     return lhs.distM < rhs.distM;
 }
 
+bool
+TargetShiftEstimator::makeTest( const struct camera_pixy5pts_s& testPts,
+                                const struct control_state_s& test_ctrl_state )
+{
+    //this is a test, make debug outputs
+    _test = true;
+    _pixy5pts = testPts;
+    _ctrl_state = test_ctrl_state;
+    calculateTargetToCameraShift();
+    //ouput rotated points
+    warnx("Rotated points:");
+    for( unsigned i=0; i < _rotPts.size(); ++i )
+    {
+        math::Vector<3> pt = _rotPts.at(i);
+        warnx("Pt %d: x= %.2f, y= %.2f, z=%.2f ", i, (double)pt(0), (double)pt(1), (double)pt(3) );
+    }
+
+    //ouput target candidates
+    warnx("Target candidates:");
+    for( unsigned i=0; i < _rotPts.size(); ++i )
+    {
+        Target t = _targetCandidates.at(i);
+        warnx("Candidate %d:", i);
+        warnx("L: x= %.2f, y= %.2f, z=%.2f ", (double)t.L(0), (double)t.L(1), (double)t.L(3) );
+        warnx("R: x= %.2f, y= %.2f, z=%.2f ", (double)t.R(0), (double)t.R(1), (double)t.R(3) );
+        warnx("M: x= %.2f, y= %.2f, z=%.2f ", (double)t.M(0), (double)t.M(1), (double)t.M(3) );
+        warnx("F: x= %.2f, y= %.2f, z=%.2f ", (double)t.F(0), (double)t.F(1), (double)t.F(3) );
+        warnx("distM: %.2f", (double)t.distM);
+        warnx("distF: %.2f", (double)t.distF);
+        warnx("distLR: %.2f", (double)t.distLR);
+        warnx("valid: %.2f", (double)t.valid);
+    }
+
+    return OK;
+}
 
 
