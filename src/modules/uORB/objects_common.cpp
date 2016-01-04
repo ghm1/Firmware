@@ -270,3 +270,6 @@ ORB_DEFINE(distance_sensor, struct distance_sensor_s);
 
 #include "topics/camera_trigger.h"
 ORB_DEFINE(camera_trigger, struct camera_trigger_s);
+
+#include "topics/camera_pixy5pts.h"
+ORB_DEFINE(camera_pixy5pts, struct camera_pixy5pts_s);

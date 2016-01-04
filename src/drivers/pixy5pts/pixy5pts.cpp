@@ -93,6 +93,7 @@ public:
 	virtual int probe();
 	virtual int info();
 	virtual int test();
+    virtual int test_pts();
 
 	virtual ssize_t read(struct file *filp, char *buffer, size_t buflen);
 
@@ -257,6 +258,63 @@ int PIXY5PTS::test()
 	return OK;
 }
 
+int PIXY5PTS::test_pts()
+{
+    /** exit immediately if driver not running **/
+    if (g_pixy5pts == nullptr) {
+        errx(1, "pixy5pts device driver is not running");
+    }
+
+    /** exit immediately if sensor is not healty **/
+    if (!_sensor_ok) {
+        errx(1, "sensor is not healthy");
+    }
+
+    /** instructions to user **/
+    warnx("sending test points");
+
+    struct camera_pixy5pts_s report;
+    report.timestamp = hrt_absolute_time();
+    report.count = 4;
+    report.x_coord[0] = 107.2309;
+    report.y_coord[0] = 66.4704;
+    report.x_coord[1] = 168.1143;
+    report.y_coord[1] = 65.2582;
+    report.x_coord[2] = 105.6128;
+    report.y_coord[2] = 127.8905;
+    report.x_coord[3] = 53.3100;
+    report.y_coord[3] = 68.4937;
+
+    //add all new objects to topic
+    for( unsigned i=0; i < 4; ++i )
+    {
+        //convert to ned
+        float x_norm = (report.x_coord[i] - PIXY5PTS_CENTER_X) / PIXY5PTS_FOCAL_X;
+        float y_norm = (report.y_coord[i] - PIXY5PTS_CENTER_Y) / PIXY5PTS_FOCAL_Y;
+        //conversion to polar coordinates
+        float phi = atan2f(y_norm, x_norm);
+        float r_dist_sq = x_norm * x_norm + y_norm * y_norm;
+        float r_dist = sqrtf(r_dist_sq);
+        float r_undist = PIXY5PTS_P1 * r_dist_sq * r_dist + PIXY5PTS_P3 * r_dist;
+
+        //set to report
+        report.x_coord[i] = r_undist * cosf(phi);
+        report.y_coord[i] = r_undist * sinf(phi);
+    }
+
+    //send new report over uorb
+    if (_camera_pixy5pts_topic == nullptr) {
+        _camera_pixy5pts_topic = orb_advertise(ORB_ID(camera_pixy5pts), &report);
+
+    } else {
+        /* publish it */
+        orb_publish(ORB_ID(camera_pixy5pts), _camera_pixy5pts_topic, &report);
+    }
+
+
+    return OK;
+}
+
 /** start periodic reads from sensor **/
 void PIXY5PTS::start()
 {
@@ -373,11 +431,18 @@ int PIXY5PTS::read_device()
         report.timestamp = hrt_absolute_time();
         report.count = num_objects;
 
+//        //debug output
+//        warnx("new block with %d points, time %lld", _reports->count(), report.timestamp);
+
+        unsigned count = 0;
         //add all new objects to topic
         while (_reports->count() > 0) {
             _reports->get(&block);
 
-            unsigned count = 0;
+//            warnx("x:%4.3f y:%4.3f",
+//                  (double)block.angle_x,
+//                  (double)block.angle_y);
+
             //convert to ned
             float x_norm = (block.angle_x - PIXY5PTS_CENTER_X) / PIXY5PTS_FOCAL_X;
             float y_norm = (block.angle_y - PIXY5PTS_CENTER_Y) / PIXY5PTS_FOCAL_Y;
@@ -388,8 +453,14 @@ int PIXY5PTS::read_device()
             float r_undist = PIXY5PTS_P1 * r_dist_sq * r_dist + PIXY5PTS_P3 * r_dist;
 
             //set to report
-            report.x_coord[count] = r_undist * cosf(phi);
-            report.y_coord[count] = r_undist * sinf(phi);
+            float x = r_undist * cosf(phi);
+            float y = r_undist * sinf(phi);
+
+            //rotate camera about -90 degree around z (x becomes -y and y becomes x)
+            //x becomes -y
+            report.x_coord[count] = -y;
+            //y becomes x
+            report.y_coord[count] = x;
 
             //counter increment
             count++;
@@ -470,7 +541,7 @@ int PIXY5PTS::read_device_block(struct pixy5pts_s *block)
 
 void pixy5pts_usage()
 {
-	warnx("missing command: try 'start', 'stop', 'info', 'test'");
+    warnx("missing command: try 'start', 'stop', 'info', 'test', 'testpts' ");
 	warnx("options:");
     warnx("    -b i2cbus (%d)", PIXY5PTS_I2C_BUS);
 }
@@ -543,6 +614,12 @@ int pixy5pts_main(int argc, char *argv[])
         g_pixy5pts->test();
 		exit(OK);
 	}
+
+    /** send test points **/
+    if (!strcmp(command, "testpts")) {
+        g_pixy5pts->test_pts();
+        exit(OK);
+    }
 
 	/** display usage info **/
     pixy5pts_usage();

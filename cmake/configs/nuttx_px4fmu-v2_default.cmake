@@ -45,8 +45,9 @@ set(config_module_list
 	drivers/gimbal
 	drivers/pwm_input
 	drivers/camera_trigger
-	drivers/irlock
-    drivers/bst
+	#drivers/irlock
+    	drivers/bst
+	drivers/pixy5pts
 
 	#
 	# System commands
@@ -109,6 +110,7 @@ set(config_module_list
 	modules/controllib
 	modules/uORB
 	modules/dataman
+	modules/target_shift_estimator
 
 	#
 	# Libraries
@@ -146,15 +148,19 @@ set(config_module_list
 	#examples/math_demo
 	# Tutorial code from
 	# https://px4.io/dev/px4_simple_app
-	#examples/px4_simple_app
+	examples/px4_simple_app
+	examples/sub_app
+	examples/pub_app
+	examples/publisher
+	examples/px4_simple_app2
 
 	# Tutorial code from
 	# https://px4.io/dev/daemon
-	#examples/px4_daemon_app
+	examples/px4_daemon_app
 
 	# Tutorial code from
 	# https://px4.io/dev/debug_values
-	#examples/px4_mavlink_debug
+	examples/px4_mavlink_debug
 
 	# Tutorial code from
 	# https://px4.io/dev/example_fixedwing_control

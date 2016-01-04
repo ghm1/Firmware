@@ -27,7 +27,10 @@
 
 #include "TargetShiftEstimator.hpp"
 
-#define TARGET_DISTANCE_L_R 2.0f
+//test diff #define TARGET_DISTANCE_L_R 2.0f
+//test results: -1.5, -1.0, 5.0
+#define TARGET_DISTANCE_L_R 0.25f
+
 
 using namespace shift_estimator;
 
@@ -107,10 +110,10 @@ TargetShiftEstimator::task_main_trampoline(int argc, char *argv[])
 void
 TargetShiftEstimator::task_main()
 {
-    warnx("[target_shift_estimator] starting\n");
-
     if(!_test)
     {
+        warnx("[target_shift_estimator] starting\n");
+
         //subscribe to topics an make a first poll
         make_subscriptions();
         poll_subscriptions();
@@ -140,12 +143,15 @@ TargetShiftEstimator::task_main()
             //check if we have new messages on topics
             poll_subscriptions();
 
-            int count = _pixy5pts.count;
-            for(unsigned i=0; i < count; i++ )
-            {
-                warnx("pixy5pts %d: %.2f", i, (double)_pixy5pts.x_coord[i] );
-                warnx("pixy5pts %d: %.2f", i, (double)_pixy5pts.y_coord[i] );
-            }
+//            int count = _pixy5pts.count;
+//            if(count == 4)
+//            {
+//                //warnx("unrotated pts: %d", count);
+//                for(unsigned i=0; i < count; i++ )
+//                {
+//                    warnx("Pt %d: x= %.2f, y= %.2f", i, (double)_pixy5pts.x_coord[i], (double)_pixy5pts.y_coord[i] );
+//                }
+//            }
 
             //do calculation
             calculateTargetToCameraShift();
@@ -153,7 +159,7 @@ TargetShiftEstimator::task_main()
     }
     else
     {
-        //this is a test!
+        warnx("[target_shift_estimator] test\n");
 
         //do calculation
         calculateTargetToCameraShift();
@@ -182,11 +188,8 @@ TargetShiftEstimator::task_main()
         }
 
         warnx("target.valid: %d", (int)_target.valid );
-        if(_target.valid)
-        {
-            warnx("distLR: %.2f", (double)_target.distLR);
-            warnx("_shift_xyz: x= %.2f, y= %.2f, z=%.2f ", (double)_shift_xyz(0), (double)_shift_xyz(1), (double)_shift_xyz(2) );
-        }
+        warnx("distLR: %.2f", (double)_target.distLR);
+        warnx("_shift_xyz: x= %.2f, y= %.2f, z=%.2f ", (double)_shift_xyz(0), (double)_shift_xyz(1), (double)_shift_xyz(2) );
 
         _task_should_exit = true;
 
@@ -228,7 +231,7 @@ TargetShiftEstimator::poll_subscriptions()
     orb_check(_pixy5pts_sub, &updated);
 
     if (updated) {
-        warnx("camera_pixy5pts updated");
+        //warnx("camera_pixy5pts updated");
         orb_copy(ORB_ID(camera_pixy5pts), _pixy5pts_sub, &_pixy5pts);
     }
 }
@@ -241,18 +244,21 @@ TargetShiftEstimator::calculateTargetToCameraShift()
         //rotate points into orthogonal camera (timestamps should be similar)
         math::Quaternion q_att(_ctrl_state.q[0], _ctrl_state.q[1], _ctrl_state.q[2], _ctrl_state.q[3]);
         math::Matrix<3, 3> R = q_att.to_dcm();
-        warnx("%.2f %.2f %.2f", (double)R(0,0), (double)R(0,1), (double)R(0,2));
-        warnx("%.2f %.2f %.2f", (double)R(1,0), (double)R(1,1), (double)R(1,2));
-        warnx("%.2f %.2f %.2f", (double)R(2,0), (double)R(2,1), (double)R(2,2));
+        //warnx("%.2f %.2f %.2f", (double)R(0,0), (double)R(0,1), (double)R(0,2));
+        //warnx("%.2f %.2f %.2f", (double)R(1,0), (double)R(1,1), (double)R(1,2));
+        //warnx("%.2f %.2f %.2f", (double)R(2,0), (double)R(2,1), (double)R(2,2));
+//        math::Vector<3> euler_angles;
+//        euler_angles = R.to_euler();
+//        warnx("euler: %.2f %.2f %.2f", (double)euler_angles(0), (double)euler_angles(1), (double)euler_angles(2));
 
-        warnx("rotated points");
+//        warnx("rotated points");
+        _rotPts.clear();
         math::Vector<3> pt;
         for(unsigned i=0; i<_pixy5pts.count; ++i)
         {
             pt(0) = _pixy5pts.x_coord[i];
             pt(1) = _pixy5pts.y_coord[i];
             pt(2) = 1.0;
-            //1. todo: ??? ist die rotation korrekt oder matrix invertieren????
             pt = R * pt;
             //to normalized image coordinates
             pt(0) = pt(0) / pt(2);
@@ -260,7 +266,7 @@ TargetShiftEstimator::calculateTargetToCameraShift()
             pt(2) = 1.0;
 
             _rotPts.push_back(pt);
-            warnx("Pt %.2f %.2f %.2f", (double)pt(0), (double)pt(1), (double)pt(2));
+//            warnx("Pt %.2f %.2f %.2f", (double)pt(0), (double)pt(1), (double)pt(2));
         }
 
         //identify points by sorting
@@ -273,6 +279,10 @@ TargetShiftEstimator::calculateTargetToCameraShift()
             //calculate x/y-position offset to target
             _shift_xyz(0) = _target.M(0) * _shift_xyz(2);
             _shift_xyz(1) = _target.M(1) * _shift_xyz(2);
+            _target.valid = false;
+
+            //warnx("distLR: %.2f", (double)_target.distLR);
+            warnx("_shift_xyz: x= %.2f, y= %.2f, z=%.2f ", (double)_shift_xyz(0), (double)_shift_xyz(1), (double)_shift_xyz(2) );
         }
     }
 }
@@ -327,7 +337,7 @@ TargetShiftEstimator::findTargetCandidate(const math::Vector<3>& L1, const math:
 
     //projection of first point
     float lambda = (P1 - L1) * u / uSq;
-    warnx("lambda: %.2f", (double)lambda);
+    //warnx("lambda: %.2f", (double)lambda);
     //test, if projected point is on line between L1 and L2 (L and R)
     if( lambda > 1.0f || lambda < 0.0f )
         return;
@@ -338,7 +348,7 @@ TargetShiftEstimator::findTargetCandidate(const math::Vector<3>& L1, const math:
 
     //projection of second point
     lambda = (P2 - L1) * u / uSq;
-    warnx("lambda: %.2f", (double)lambda);
+    //warnx("lambda: %.2f", (double)lambda);
     //test, if projected point is on line between L1 and L2 (L and R)
     if( lambda > 1.0f || lambda < 0.0f )
         return;
