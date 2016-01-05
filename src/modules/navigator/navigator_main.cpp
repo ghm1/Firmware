@@ -144,6 +144,8 @@ Navigator::Navigator() :
 	_takeoff(this, "TKF"),
 	_rtl(this, "RTL"),
 	_rcLoss(this, "RCL"),
+    //ghm1test
+    _targetLand(this, "TARGET_LAND"),
 	_dataLinkLoss(this, "DLL"),
 	_engineFailure(this, "EF"),
 	_gpsFailure(this, "GPSF"),
@@ -161,6 +163,8 @@ Navigator::Navigator() :
 	_navigation_mode_array[5] = &_gpsFailure;
 	_navigation_mode_array[6] = &_rcLoss;
 	_navigation_mode_array[7] = &_takeoff;
+    //ghm1test
+    _navigation_mode_array[8] = &_targetLand;
 
 	updateParams();
 }

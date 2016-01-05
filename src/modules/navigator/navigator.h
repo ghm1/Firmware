@@ -68,11 +68,14 @@
 #include "gpsfailure.h"
 #include "rcloss.h"
 #include "geofence.h"
+//ghm1test
+#include "target_land.h"
 
 /**
  * Number of navigation modes that need on_active/on_inactive calls
  */
-#define NAVIGATOR_MODE_ARRAY_SIZE 8
+//ghm1test
+#define NAVIGATOR_MODE_ARRAY_SIZE 9
 
 class Navigator : public control::SuperBlock
 {
@@ -227,8 +230,9 @@ private:
 	Loiter		_loiter;			/**< class that handles loiter */
 	Takeoff		_takeoff;			/**< class for handling takeoff commands */
 	RTL 		_rtl;				/**< class that handles RTL */
-	RCLoss 		_rcLoss;				/**< class that handles RTL according to
-							  OBC rules (rc loss mode) */
+    RCLoss 		_rcLoss;				/**< class that handles RTL according to  OBC rules (rc loss mode) */
+    //ghm1test
+    TargetLand    _targetLand;
 	DataLinkLoss	_dataLinkLoss;			/**< class that handles the OBC datalink loss mode */
 	EngineFailure	_engineFailure;			/**< class that handles the engine failure mode
 							  (FW only!) */
