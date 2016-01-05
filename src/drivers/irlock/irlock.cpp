@@ -163,12 +163,12 @@ int IRLOCK::init()
 	if (_reports == nullptr) {
 		return ENOTTY;
 
-	} else {
-		_sensor_ok = true;
-		/** start work queue **/
-		start();
-		return OK;
-	}
+    } else {
+        _sensor_ok = true;
+        /** start work queue **/
+        start();
+        return OK;
+    }
 }
 
 /** probe the device is on the I2C bus **/
@@ -341,6 +341,9 @@ int IRLOCK::read_device()
 	_reports->flush();
 	int num_objects = 0;
 
+    //instance of new pixy topic
+
+    //get all new objects from pixy
 	while (sync_device() && (num_objects < IRLOCK_OBJECTS_MAX)) {
 		struct irlock_s block;
 
@@ -349,7 +352,17 @@ int IRLOCK::read_device()
 		}
 
 		_reports->force(&block);
+
+        num_objects++;
+
 	}
+    //todo:
+    //iterate over _reports
+    //convert new items to ned
+    //add to topic
+    //send over uorb
+    //number of new points
+    //points array
 
 	return OK;
 }

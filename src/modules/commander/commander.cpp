@@ -1020,7 +1020,7 @@ int commander_thread_main(int argc, char *argv[])
 	// main_states_str[vehicle_status_s::MAIN_STATE_POSCTL]			= "POSCTL";
 	// main_states_str[vehicle_status_s::MAIN_STATE_AUTO_MISSION]		= "AUTO_MISSION";
 	// main_states_str[vehicle_status_s::MAIN_STATE_AUTO_LOITER]			= "AUTO_LOITER";
-	// main_states_str[vehicle_status_s::MAIN_STATE_AUTO_RTL]			= "AUTO_RTL";
+    // main_states_str[vehicle_status_s::MAIN_STATE_AUTO_RTL]			= "AUTO_RTL";
 	// main_states_str[vehicle_status_s::MAIN_STATE_ACRO]			= "ACRO";
 	// main_states_str[vehicle_status_s::MAIN_STATE_STAB]			= "STAB";
 	// main_states_str[vehicle_status_s::MAIN_STATE_OFFBOARD]			= "OFFBOARD";
@@ -1147,6 +1147,7 @@ int commander_thread_main(int argc, char *argv[])
 	orb_advert_t mission_pub = nullptr;
 	mission_s mission;
 
+    //ghm1: read mission from dataman and store it here
 	if (dm_read(DM_KEY_MISSION_STATE, 0, &mission, sizeof(mission_s)) == sizeof(mission_s)) {
 		if (mission.dataman_id >= 0 && mission.dataman_id <= 1) {
 			if (mission.count > 0) {
@@ -2753,6 +2754,26 @@ set_main_state_rc(struct vehicle_status_s *status_local, struct manual_control_s
 		/* if we get here mode was rejected, continue to evaluate the main system mode */
 	}
 
+    //ghm1test
+    /* target land switch overrides main switch */
+//    if (sp_man->return_switch == manual_control_setpoint_s::SWITCH_POS_ON) {
+//		res = main_state_transition(status_local,vehicle_status_s::MAIN_STATE_AUTO_RTL);
+
+//		if (res == TRANSITION_DENIED) {
+//			print_reject_mode(status_local, "AUTO_RTL");
+
+//			/* fallback to LOITER if home position not set */
+//			res = main_state_transition(status_local,vehicle_status_s::MAIN_STATE_AUTO_LOITER);
+//		}
+
+//		if (res != TRANSITION_DENIED) {
+//			/* changed successfully or already in this state */
+//			return res;
+//		}
+
+//		/* if we get here mode was rejected, continue to evaluate the main system mode */
+//	}
+
 	/* offboard and RTL switches off or denied, check main mode switch */
 	switch (sp_man->mode_switch) {
 	case manual_control_setpoint_s::SWITCH_POS_NONE:
@@ -2939,6 +2960,8 @@ set_control_mode()
 		control_mode.flag_control_termination_enabled = false;
 		break;
 
+
+    //ghm1: attention, auto case is set under NAVIGATION_STATE_AUTO_TAKEOFF
 	case vehicle_status_s::NAVIGATION_STATE_AUTO_RTL:
 	case vehicle_status_s::NAVIGATION_STATE_AUTO_RCRECOVER:
 		/* override is not ok for the RTL and recovery mode */

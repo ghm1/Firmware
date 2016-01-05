@@ -113,6 +113,7 @@ Navigator::Navigator() :
 	_offboard_mission_sub(-1),
 	_param_update_sub(-1),
 	_vehicle_command_sub(-1),
+    _target_land_position_sub(-1),
 	_pos_sp_triplet_pub(nullptr),
 	_mission_result_pub(nullptr),
 	_geofence_result_pub(nullptr),
@@ -297,6 +298,7 @@ Navigator::task_main()
 	_offboard_mission_sub = orb_subscribe(ORB_ID(offboard_mission));
 	_param_update_sub = orb_subscribe(ORB_ID(parameter_update));
 	_vehicle_command_sub = orb_subscribe(ORB_ID(vehicle_command));
+    _target_land_position_sub = orb_subscribe(ORB_ID(target_land_position));
 
 	/* copy all topics first time */
 	vehicle_status_update();
@@ -395,6 +397,12 @@ Navigator::task_main()
 		if (updated) {
 			home_position_update();
 		}
+
+        /* target land position update */
+        orb_check(_target_land_position_sub, &updated);
+        if (updated) {
+            orb_copy(ORB_ID(target_land_position), _target_land_position_sub, &_target_land_position);
+        }
 
 		orb_check(_vehicle_command_sub, &updated);
 		if (updated) {

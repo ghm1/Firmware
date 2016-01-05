@@ -273,3 +273,7 @@ ORB_DEFINE(camera_trigger, struct camera_trigger_s);
 
 #include "topics/camera_pixy5pts.h"
 ORB_DEFINE(camera_pixy5pts, struct camera_pixy5pts_s);
+
+#include "topics/target_land_position.h"
+ORB_DEFINE(target_land_position, struct target_land_position_s);
+

@@ -93,7 +93,7 @@ TargetLand::on_activation()
             mavlink_log_critical(_navigator->get_mavlink_fd(), "no TARGET_LAND when landed");
 
 		/* if lower than return altitude, climb up first */
-		} else if (_navigator->get_global_position()->alt < _navigator->get_home_position()->alt
+        } else if (_navigator->get_global_position()->alt < _navigator->get_target_land_position()->alt
 			   + _param_return_alt.get()) {
             _target_land_state = TARGET_LAND_STATE_CLIMB;
             _target_land_start_lock = false;
@@ -137,7 +137,7 @@ TargetLand::set_target_land_item()
 
     switch (_target_land_state) {
     case TARGET_LAND_STATE_CLIMB: {
-		float climb_alt = _navigator->get_home_position()->alt + _param_return_alt.get();
+        float climb_alt = _navigator->get_target_land_position()->alt + _param_return_alt.get();
 
 		_mission_item.lat = _navigator->get_global_position()->lat;
 		_mission_item.lon = _navigator->get_global_position()->lon;
@@ -155,13 +155,13 @@ TargetLand::set_target_land_item()
 
         mavlink_log_critical(_navigator->get_mavlink_fd(), "TARGET_LAND: climb to %d m (%d m above home)",
 			(int)(climb_alt),
-			(int)(climb_alt - _navigator->get_home_position()->alt));
+            (int)(climb_alt - _navigator->get_target_land_position()->alt));
 		break;
 	}
 
     case TARGET_LAND_STATE_RETURN: {
-		_mission_item.lat = _navigator->get_home_position()->lat;
-		_mission_item.lon = _navigator->get_home_position()->lon;
+        _mission_item.lat = _navigator->get_target_land_position()->lat;
+        _mission_item.lon = _navigator->get_target_land_position()->lon;
 		 // don't change altitude
 
 		 if (pos_sp_triplet->previous.valid) {
@@ -187,18 +187,18 @@ TargetLand::set_target_land_item()
 
         mavlink_log_critical(_navigator->get_mavlink_fd(), "TARGET_LAND: return at %d m (%d m above home)",
 			(int)(_mission_item.altitude),
-			(int)(_mission_item.altitude - _navigator->get_home_position()->alt));
+            (int)(_mission_item.altitude - _navigator->get_target_land_position()->alt));
 
         _target_land_start_lock = true;
 		break;
 	}
 
     case TARGET_LAND_STATE_DESCEND: {
-		_mission_item.lat = _navigator->get_home_position()->lat;
-		_mission_item.lon = _navigator->get_home_position()->lon;
+        _mission_item.lat = _navigator->get_target_land_position()->lat;
+        _mission_item.lon = _navigator->get_target_land_position()->lon;
 		_mission_item.altitude_is_relative = false;
-		_mission_item.altitude = _navigator->get_home_position()->alt + _param_descend_alt.get();
-		_mission_item.yaw = _navigator->get_home_position()->yaw;
+        _mission_item.altitude = _navigator->get_target_land_position()->alt + _param_descend_alt.get();
+        _mission_item.yaw = _navigator->get_target_land_position()->yaw;
 		_mission_item.loiter_radius = _navigator->get_loiter_radius();
 		_mission_item.loiter_direction = 1;
 		_mission_item.nav_cmd = NAV_CMD_LOITER_TIME_LIMIT;
@@ -210,18 +210,18 @@ TargetLand::set_target_land_item()
 
         mavlink_log_critical(_navigator->get_mavlink_fd(), "TARGET_LAND: descend to %d m (%d m above home)",
 			(int)(_mission_item.altitude),
-			(int)(_mission_item.altitude - _navigator->get_home_position()->alt));
+            (int)(_mission_item.altitude - _navigator->get_target_land_position()->alt));
 		break;
 	}
 
     case TARGET_LAND_STATE_LOITER: {
 		bool autoland = _param_land_delay.get() > -DELAY_SIGMA;
 
-		_mission_item.lat = _navigator->get_home_position()->lat;
-		_mission_item.lon = _navigator->get_home_position()->lon;
+        _mission_item.lat = _navigator->get_target_land_position()->lat;
+        _mission_item.lon = _navigator->get_target_land_position()->lon;
 		_mission_item.altitude_is_relative = false;
-		_mission_item.altitude = _navigator->get_home_position()->alt + _param_descend_alt.get();
-		_mission_item.yaw = _navigator->get_home_position()->yaw;
+        _mission_item.altitude = _navigator->get_target_land_position()->alt + _param_descend_alt.get();
+        _mission_item.yaw = _navigator->get_target_land_position()->yaw;
 		_mission_item.loiter_radius = _navigator->get_loiter_radius();
 		_mission_item.loiter_direction = 1;
 		_mission_item.nav_cmd = autoland ? NAV_CMD_LOITER_TIME_LIMIT : NAV_CMD_LOITER_UNLIMITED;
@@ -243,11 +243,11 @@ TargetLand::set_target_land_item()
 	}
 
     case TARGET_LAND_STATE_LAND: {
-		_mission_item.lat = _navigator->get_home_position()->lat;
-		_mission_item.lon = _navigator->get_home_position()->lon;
+        _mission_item.lat = _navigator->get_target_land_position()->lat;
+        _mission_item.lon = _navigator->get_target_land_position()->lon;
 		_mission_item.altitude_is_relative = false;
-		_mission_item.altitude = _navigator->get_home_position()->alt;
-		_mission_item.yaw = _navigator->get_home_position()->yaw;
+        _mission_item.altitude = _navigator->get_target_land_position()->alt;
+        _mission_item.yaw = _navigator->get_target_land_position()->yaw;
 		_mission_item.loiter_radius = _navigator->get_loiter_radius();
 		_mission_item.loiter_direction = 1;
 		_mission_item.nav_cmd = NAV_CMD_LAND;
@@ -262,10 +262,10 @@ TargetLand::set_target_land_item()
 	}
 
     case TARGET_LAND_STATE_LANDED: {
-		_mission_item.lat = _navigator->get_home_position()->lat;
-		_mission_item.lon = _navigator->get_home_position()->lon;
+        _mission_item.lat = _navigator->get_target_land_position()->lat;
+        _mission_item.lon = _navigator->get_target_land_position()->lon;
 		_mission_item.altitude_is_relative = false;
-		_mission_item.altitude = _navigator->get_home_position()->alt;
+        _mission_item.altitude = _navigator->get_target_land_position()->alt;
 		// Do not change / control yaw in landed
 		_mission_item.yaw = NAN;
 		_mission_item.loiter_radius = _navigator->get_loiter_radius();

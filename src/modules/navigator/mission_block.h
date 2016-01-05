@@ -68,12 +68,12 @@ public:
 	virtual ~MissionBlock();
 
 protected:
-	/**
-	 * Check if mission item has been reached
-	 * @return true if successfully reached
-	 */
-	bool is_mission_item_reached();
-	/**
+    /**
+     * Check if mission item has been reached
+     * @return true if successfully reached
+     */
+    bool is_mission_item_reached();
+    /**
 	 * Reset all reached flags
 	 */
 	void reset_mission_item_reached();
