@@ -55,8 +55,7 @@ namespace shift_estimator
          *
          * @return		OK on success.
          */
-        bool    initTest( const struct camera_pixy5pts_s& testPts,
-                          const struct control_state_s& test_ctrl_state );
+        bool    test();
 
 
     private:

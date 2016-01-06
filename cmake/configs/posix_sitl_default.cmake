@@ -49,6 +49,7 @@ set(config_module_list
 	modules/sdlog2
 	modules/commander
 	modules/controllib
+ 	modules/target_shift_estimator
 	lib/mathlib
 	lib/mathlib/math/filter
 	lib/conversion

@@ -16,7 +16,7 @@
 #include <vector>
 #include <algorithm>
 #include <px4_config.h>
-#include <nuttx/sched.h>
+//#include <nuttx/sched.h>
 #include <math.h>
 
 #include <systemlib/systemlib.h>
@@ -131,6 +131,7 @@ TargetShiftEstimator::task_main()
 
             /* timed out - periodic check for _task_should_exit */
             if (pret == 0) {
+                warnx("[target_shift_estimator] poll timeout");
                 continue;
             }
 
@@ -160,40 +161,7 @@ TargetShiftEstimator::task_main()
     else
     {
         warnx("[target_shift_estimator] test\n");
-
-        //do calculation
-        calculateTargetToCameraShift();
-
-        warnx("Rotated points: %d", _rotPts.size());
-        for( unsigned i=0; i < _rotPts.size(); ++i )
-        {
-            math::Vector<3> pt = _rotPts.at(i);
-            warnx("Pt %d: x= %.2f, y= %.2f, z=%.2f ", i, (double)pt(0), (double)pt(1), (double)pt(3) );
-        }
-
-        //ouput target candidates
-        warnx("Target candidates: %d", _targetCandidates.size());
-        for( unsigned i=0; i < _targetCandidates.size(); ++i )
-        {
-            Target t = _targetCandidates.at(i);
-            warnx("Candidate %d:", i);
-            warnx("L: x= %.2f, y= %.2f, z=%.2f ", (double)t.L(0), (double)t.L(1), (double)t.L(3) );
-            warnx("R: x= %.2f, y= %.2f, z=%.2f ", (double)t.R(0), (double)t.R(1), (double)t.R(3) );
-            warnx("M: x= %.2f, y= %.2f, z=%.2f ", (double)t.M(0), (double)t.M(1), (double)t.M(3) );
-            warnx("F: x= %.2f, y= %.2f, z=%.2f ", (double)t.F(0), (double)t.F(1), (double)t.F(3) );
-            warnx("distM: %.2f", (double)t.distM);
-            warnx("distF: %.2f", (double)t.distF);
-            warnx("distLR: %.2f", (double)t.distLR);
-            warnx("valid: %.2f", (double)t.valid);
-        }
-
-        warnx("target.valid: %d", (int)_target.valid );
-        warnx("distLR: %.2f", (double)_target.distLR);
-        warnx("_shift_xyz: x= %.2f, y= %.2f, z=%.2f ", (double)_shift_xyz(0), (double)_shift_xyz(1), (double)_shift_xyz(2) );
-
-        _task_should_exit = true;
-
-        sleep(1);
+        test();
     }
 
     warnx("[target_shift_estimator] exiting.\n");
@@ -282,7 +250,7 @@ TargetShiftEstimator::calculateTargetToCameraShift()
             _target.valid = false;
 
             //warnx("distLR: %.2f", (double)_target.distLR);
-            warnx("_shift_xyz: x= %.2f, y= %.2f, z=%.2f ", (double)_shift_xyz(0), (double)_shift_xyz(1), (double)_shift_xyz(2) );
+            //warnx("_shift_xyz: x= %.2f, y= %.2f, z=%.2f ", (double)_shift_xyz(0), (double)_shift_xyz(1), (double)_shift_xyz(2) );
         }
     }
 }
@@ -405,12 +373,79 @@ TargetShiftEstimator::targetCompare(const Target& lhs, const Target& rhs)
 }
 
 bool
-TargetShiftEstimator::initTest( const struct camera_pixy5pts_s& testPts,
-                                const struct control_state_s& test_ctrl_state )
+TargetShiftEstimator::test()
 {
+    struct camera_pixy5pts_s testPts;
+    testPts.count = 4;
+    testPts.timestamp = hrt_absolute_time();
+    //add points
+//    testPts.x_coord[0] = -0.3006;
+//    testPts.y_coord[0] = -0.2003;
+//    testPts.x_coord[1] = -0.1000;
+//    testPts.y_coord[1] = -0.2000;
+//    testPts.x_coord[2] = -0.3005;
+//    testPts.y_coord[2] = -0.0000;
+//    testPts.x_coord[3] = -0.4998;
+//    testPts.y_coord[3] = -0.1998;
+    testPts.x_coord[0] = -0.1671;
+    testPts.y_coord[0] = -0.1075;
+    testPts.x_coord[1] = 0.0238;
+    testPts.y_coord[1] = -0.1098;
+    testPts.x_coord[2] = -0.1719;
+    testPts.y_coord[2] = 0.0850;
+    testPts.x_coord[3] = -0.3500;
+    testPts.y_coord[3] = -0.1052;
+
+    struct control_state_s test_ctrl_state;
+    //math::Quaternion q(1, 0, 0, 0);
+    math::Quaternion q(0.99718, 0.043538, -0.06099, -0.0026629);
+    test_ctrl_state.q[0] = q(0);
+    test_ctrl_state.q[1] = q(1);
+    test_ctrl_state.q[2] = q(2);
+    test_ctrl_state.q[3] = q(3);
+
     _test = true;
     _pixy5pts = testPts;
     _ctrl_state = test_ctrl_state;
+
+    while(!_task_should_exit)
+    {
+        //time to calculate, simulates poll
+        usleep(20000); //20ms
+
+        calculateTargetToCameraShift();
+
+        //do calculation
+        //calculateTargetToCameraShift();
+
+//        warnx("Rotated points: %d", _rotPts.size());
+//        for( unsigned i=0; i < _rotPts.size(); ++i )
+//        {
+//            math::Vector<3> pt = _rotPts.at(i);
+//            warnx("Pt %d: x= %.2f, y= %.2f, z=%.2f ", i, (double)pt(0), (double)pt(1), (double)pt(3) );
+//        }
+
+//        //ouput target candidates
+//        warnx("Target candidates: %d", _targetCandidates.size());
+//        for( unsigned i=0; i < _targetCandidates.size(); ++i )
+//        {
+//            Target t = _targetCandidates.at(i);
+//            warnx("Candidate %d:", i);
+//            warnx("L: x= %.2f, y= %.2f, z=%.2f ", (double)t.L(0), (double)t.L(1), (double)t.L(3) );
+//            warnx("R: x= %.2f, y= %.2f, z=%.2f ", (double)t.R(0), (double)t.R(1), (double)t.R(3) );
+//            warnx("M: x= %.2f, y= %.2f, z=%.2f ", (double)t.M(0), (double)t.M(1), (double)t.M(3) );
+//            warnx("F: x= %.2f, y= %.2f, z=%.2f ", (double)t.F(0), (double)t.F(1), (double)t.F(3) );
+//            warnx("distM: %.2f", (double)t.distM);
+//            warnx("distF: %.2f", (double)t.distF);
+//            warnx("distLR: %.2f", (double)t.distLR);
+//            warnx("valid: %.2f", (double)t.valid);
+//        }
+
+//        warnx("target.valid: %d", (int)_target.valid );
+//        warnx("distLR: %.2f", (double)_target.distLR);
+        warnx("_shift_xyz: x= %.2f, y= %.2f, z=%.2f ", (double)_shift_xyz(0), (double)_shift_xyz(1), (double)_shift_xyz(2) );
+
+    }
 
     return OK;
 }

@@ -59,7 +59,7 @@
 #include <errno.h>
 
 #include <px4_config.h>
-#include <nuttx/sched.h>
+//#include <nuttx/sched.h>
 
 #include <systemlib/systemlib.h>
 #include <systemlib/err.h>
@@ -67,53 +67,16 @@
 #include "TargetShiftEstimator.hpp"
 
 extern "C" __EXPORT int target_shift_estimator_main(int argc, char *argv[]);
-bool makeTest();
 
 namespace shift_estimator {
     //global instance
     TargetShiftEstimator* instance;
 }
 
-bool makeTest()
-{
-    struct camera_pixy5pts_s testPts;
-    testPts.count = 4;
-    testPts.timestamp = hrt_absolute_time();
-    //add points
-//    testPts.x_coord[0] = -0.3006;
-//    testPts.y_coord[0] = -0.2003;
-//    testPts.x_coord[1] = -0.1000;
-//    testPts.y_coord[1] = -0.2000;
-//    testPts.x_coord[2] = -0.3005;
-//    testPts.y_coord[2] = -0.0000;
-//    testPts.x_coord[3] = -0.4998;
-//    testPts.y_coord[3] = -0.1998;
-    testPts.x_coord[0] = -0.1671;
-    testPts.y_coord[0] = -0.1075;
-    testPts.x_coord[1] = 0.0238;
-    testPts.y_coord[1] = -0.1098;
-    testPts.x_coord[2] = -0.1719;
-    testPts.y_coord[2] = 0.0850;
-    testPts.x_coord[3] = -0.3500;
-    testPts.y_coord[3] = -0.1052;
-
-    struct control_state_s test_ctrl_state;
-    //math::Quaternion q(1, 0, 0, 0);
-    math::Quaternion q(0.99718, 0.043538, -0.06099, -0.0026629);
-    test_ctrl_state.q[0] = q(0);
-    test_ctrl_state.q[1] = q(1);
-    test_ctrl_state.q[2] = q(2);
-    test_ctrl_state.q[3] = q(3);
-
-    bool success = shift_estimator::instance->initTest(testPts, test_ctrl_state);
-
-    return success;
-}
-
 int target_shift_estimator_main(int argc, char *argv[])
 {
     if (argc < 2) {
-        warnx("usage: target_shift_estimator {start|stop|status|test}");
+        warnx("usage: target_shift_estimator {start|stop|status}");
         return 1;
     }
 
@@ -163,30 +126,30 @@ int target_shift_estimator_main(int argc, char *argv[])
         }
     }
 
-    if (!strcmp(argv[1], "test")) {
-        if (shift_estimator::instance) {
-            warnx("already running, please stop first for test");
-            return 0;
+//    if (!strcmp(argv[1], "test")) {
+//        if (shift_estimator::instance) {
+//            warnx("already running, please stop first for test");
+//            return 0;
 
-        } else {
-            shift_estimator::instance = new shift_estimator::TargetShiftEstimator;
+//        } else {
+//            shift_estimator::instance = new shift_estimator::TargetShiftEstimator;
 
-            if (shift_estimator::instance == nullptr) {
-                warnx("alloc failed");
-                return 1;
-            }
+//            if (shift_estimator::instance == nullptr) {
+//                warnx("alloc failed");
+//                return 1;
+//            }
 
-            makeTest();
-            if (OK != shift_estimator::instance->start()) {
-                delete shift_estimator::instance;
-                shift_estimator::instance = nullptr;
-                warnx("start failed");
-                return 1;
-            }
+//            makeTest();
+//            if (OK != shift_estimator::instance->start()) {
+//                delete shift_estimator::instance;
+//                shift_estimator::instance = nullptr;
+//                warnx("start failed");
+//                return 1;
+//            }
 
-            return 1;
-        }
-    }
+//            return 1;
+//        }
+//    }
 
     warnx("unrecognized command");
     return 1;
