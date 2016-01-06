@@ -277,3 +277,6 @@ ORB_DEFINE(camera_pixy5pts, struct camera_pixy5pts_s);
 #include "topics/target_land_position.h"
 ORB_DEFINE(target_land_position, struct target_land_position_s);
 
+#include "topics/vehicle_command_ack.h"
+ORB_DEFINE(vehicle_command_ack, struct vehicle_command_ack_s);
+

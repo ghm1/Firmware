@@ -77,6 +77,7 @@
 #include <mavlink/mavlink_log.h>
 
 #include <uORB/topics/parameter_update.h>
+#include <uORB/topics/vehicle_command_ack.h>
 
 #include "mavlink_bridge_header.h"
 #include "mavlink_main.h"
@@ -146,6 +147,7 @@ Mavlink::Mavlink() :
 	_mission_manager(nullptr),
 	_parameters_manager(nullptr),
 	_mavlink_ftp(nullptr),
+	_mavlink_log_handler(nullptr),
 	_mode(MAVLINK_MODE_NORMAL),
 	_channel(MAVLINK_COMM_0),
 	_radio_id(0),
@@ -660,8 +662,47 @@ int Mavlink::mavlink_open_uart(int baud, const char *uart_name, struct termios *
 		return -EINVAL;
 	}
 
+	/* back off 1800 ms to avoid running into the USB setup timing */
+	while (_mode == MAVLINK_MODE_CONFIG &&
+		hrt_absolute_time() < 1800U * 1000U) {
+		usleep(50000);
+	}
+
 	/* open uart */
 	_uart_fd = ::open(uart_name, O_RDWR | O_NOCTTY);
+
+	/* if this is a config link, stay here and wait for it to open */
+	if (_uart_fd < 0 && _mode == MAVLINK_MODE_CONFIG) {
+
+		int armed_fd = orb_subscribe(ORB_ID(actuator_armed));
+		struct actuator_armed_s armed;
+
+		/* get the system arming state and abort on arming */
+		while (_uart_fd < 0) {
+
+			/* abort if an arming topic is published and system is armed */
+			bool updated = false;
+			orb_check(armed_fd, &updated);
+
+			if (updated) {
+				/* the system is now providing arming status feedback.
+				 * instead of timing out, we resort to abort bringing
+				 * up the terminal.
+				 */
+				orb_copy(ORB_ID(actuator_armed), armed_fd, &armed);
+
+				if (armed.armed) {
+					/* this is not an error, but we are done */
+					return -1;
+				}
+			}
+
+			usleep(100000);
+			_uart_fd = ::open(uart_name, O_RDWR | O_NOCTTY);
+		};
+
+		close(armed_fd);
+	}
 
 	if (_uart_fd < 0) {
 		return _uart_fd;
@@ -890,14 +931,17 @@ Mavlink::send_message(const uint8_t msgid, const void *msg, uint8_t component_ID
 	}
 #else
 	if (get_protocol() == UDP) {
-		ret = sendto(_socket_fd, buf, packet_len, 0, (struct sockaddr *)&_src_addr, sizeof(_src_addr));
+		if (get_client_source_initialized()) {
+			ret = sendto(_socket_fd, buf, packet_len, 0, (struct sockaddr *)&_src_addr, sizeof(_src_addr));
+		}
 
 		struct telemetry_status_s &tstatus = get_rx_status();
 
 		/* resend heartbeat via broadcast */
-		if (((hrt_elapsed_time(&tstatus.heartbeat_time) > 3 * 1000 * 1000) ||
+		if ((_mode != MAVLINK_MODE_ONBOARD)
+			&& (((hrt_elapsed_time(&tstatus.heartbeat_time) > 3 * 1000 * 1000) ||
 			(tstatus.heartbeat_time == 0)) &&
-			msgid == MAVLINK_MSG_ID_HEARTBEAT) {
+			msgid == MAVLINK_MSG_ID_HEARTBEAT)) {
 
 			int bret = sendto(_socket_fd, buf, packet_len, 0, (struct sockaddr *)&_bcast_addr, sizeof(_bcast_addr));
 
@@ -1004,11 +1048,14 @@ Mavlink::init_udp()
 		return;
 	}
 
-	/* set default target address */
+	/* set default target address, but not for onboard mode (will be set on first recieved packet) */
 	memset((char *)&_src_addr, 0, sizeof(_src_addr));
-	_src_addr.sin_family = AF_INET;
-	inet_aton("127.0.0.1", &_src_addr.sin_addr);
-	_src_addr.sin_port = htons(DEFAULT_REMOTE_PORT_UDP);
+	if (_mode != MAVLINK_MODE_ONBOARD) {
+		set_client_source_initialized();
+		_src_addr.sin_family = AF_INET;
+		inet_aton("127.0.0.1", &_src_addr.sin_addr);
+		_src_addr.sin_port = htons(DEFAULT_REMOTE_PORT_UDP);
+	}
 
 	/* default broadcast address */
 	memset((char *)&_bcast_addr, 0, sizeof(_bcast_addr));
@@ -1030,6 +1077,9 @@ Mavlink::handle_message(const mavlink_message_t *msg)
 
 	/* handle packet with ftp component */
 	_mavlink_ftp->handle_message(msg);
+
+	/* handle packet with log component */
+	_mavlink_log_handler->handle_message(msg);
 
 	if (get_forwarding_on()) {
 		/* forward any messages to other mavlink instances */
@@ -1568,14 +1618,20 @@ Mavlink::task_main(int argc, char *argv[])
 		_datarate = MAX_DATA_RATE;
 	}
 
-	if (Mavlink::instance_exists(_device_name, this)) {
-		warnx("%s already running", _device_name);
-		return ERROR;
-	}
-
 	if (get_protocol() == SERIAL) {
-	warnx("mode: %u, data rate: %d B/s on %s @ %dB", _mode, _datarate, _device_name, _baudrate);
+		if (Mavlink::instance_exists(_device_name, this)) {
+			warnx("%s already running", _device_name);
+			return ERROR;
+		}
+
+		warnx("mode: %u, data rate: %d B/s on %s @ %dB", _mode, _datarate, _device_name, _baudrate);
+
 	} else if (get_protocol() == UDP) {
+		if (Mavlink::get_instance_for_network_port(_network_port) != nullptr) {
+			warnx("port %d already occupied", _network_port);
+			return ERROR;
+		}
+
 		warnx("mode: %u, data rate: %d B/s on udp port %hu", _mode, _datarate, _network_port);
 	}
 	/* flush stdout in case MAVLink is about to take it over */
@@ -1587,9 +1643,12 @@ Mavlink::task_main(int argc, char *argv[])
 	/* default values for arguments */
 	_uart_fd = mavlink_open_uart(_baudrate, _device_name, &uart_config_original);
 
-	if (_uart_fd < 0) {
+	if (_uart_fd < 0 && _mode != MAVLINK_MODE_CONFIG) {
 		warn("could not open %s", _device_name);
 		return ERROR;
+	} else if (_uart_fd < 0 && _mode == MAVLINK_MODE_CONFIG) {
+		/* the config link is optional */
+		return OK;
 	}
 
 #endif
@@ -1639,9 +1698,13 @@ Mavlink::task_main(int argc, char *argv[])
 	uint64_t param_time = 0;
 	MavlinkOrbSubscription *status_sub = add_orb_subscription(ORB_ID(vehicle_status));
 	uint64_t status_time = 0;
+	MavlinkOrbSubscription *ack_sub = add_orb_subscription(ORB_ID(vehicle_command_ack));
+	uint64_t ack_time = 0;
 
 	struct vehicle_status_s status;
 	status_sub->update(&status_time, &status);
+	struct vehicle_command_ack_s command_ack;
+	ack_sub->update(&ack_time, &command_ack);
 
 	/* add default streams depending on mode */
 
@@ -1663,6 +1726,11 @@ Mavlink::task_main(int argc, char *argv[])
 	_mavlink_ftp = (MavlinkFTP *) MavlinkFTP::new_instance(this);
 	_mavlink_ftp->set_interval(interval_from_rate(80.0f));
 	LL_APPEND(_streams, _mavlink_ftp);
+
+	/* MAVLINK_Log_Handler */
+	_mavlink_log_handler = (MavlinkLogHandler *) MavlinkLogHandler::new_instance(this);
+	_mavlink_log_handler->set_interval(interval_from_rate(80.0f));
+	LL_APPEND(_streams, _mavlink_log_handler);
 
 	/* MISSION_STREAM stream, actually sends all MISSION_XXX messages at some rate depending on
 	 * remote requests rate. Rate specified here controls how much bandwidth we will reserve for
@@ -1854,6 +1922,15 @@ Mavlink::task_main(int argc, char *argv[])
 			set_hil_enabled(status.hil_state == vehicle_status_s::HIL_STATE_ON);
 
 			set_manual_input_mode_generation(status.rc_input_mode == vehicle_status_s::RC_IN_MODE_GENERATED);
+		}
+
+		/* send command ACK */
+		if (ack_sub->update(&ack_time, &command_ack)) {
+			mavlink_command_ack_t msg;
+			msg.result = command_ack.result;
+			msg.command = command_ack.command;
+
+			send_message(MAVLINK_MSG_ID_COMMAND_ACK, &msg);
 		}
 
 		/* check for requested subscriptions */

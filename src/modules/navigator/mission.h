@@ -88,7 +88,8 @@ public:
 		MISSION_YAWMODE_NONE = 0,
 		MISSION_YAWMODE_FRONT_TO_WAYPOINT = 1,
 		MISSION_YAWMODE_FRONT_TO_HOME = 2,
-		MISSION_YAWMODE_BACK_TO_HOME = 3
+		MISSION_YAWMODE_BACK_TO_HOME = 3,
+		MISSION_YAWMODE_MAX = 4
 	};
 
 private:
@@ -133,7 +134,7 @@ private:
 	 */
 	void altitude_sp_foh_reset();
 
-	int get_absolute_altitude_for_item(struct mission_item_s &mission_item);
+	float get_absolute_altitude_for_item(struct mission_item_s &mission_item);
 
 	/**
 	 * Read current or next mission item from the dataman and watch out for DO_JUMPS

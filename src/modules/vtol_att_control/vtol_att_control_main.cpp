@@ -104,7 +104,7 @@ VtolAttitudeControl::VtolAttitudeControl() :
 	memset(&_batt_status, 0, sizeof(_batt_status));
 	memset(&_vehicle_cmd, 0, sizeof(_vehicle_cmd));
 
-	_params.idle_pwm_mc = PWM_LOWEST_MIN;
+	_params.idle_pwm_mc = PWM_DEFAULT_MIN;
 	_params.vtol_motor_count = 0;
 	_params.vtol_fw_permanent_stab = 0;
 
@@ -559,7 +559,7 @@ void VtolAttitudeControl::task_main()
 	_vtol_type->set_idle_mc();
 
 	/* wakeup source*/
-	px4_pollfd_struct_t fds[3];	/*input_mc, input_fw, parameters*/
+	px4_pollfd_struct_t fds[3] = {};	/*input_mc, input_fw, parameters*/
 
 	fds[0].fd     = _actuator_inputs_mc;
 	fds[0].events = POLLIN;

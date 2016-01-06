@@ -1178,7 +1178,8 @@ MavlinkReceiver::handle_message_heartbeat(mavlink_message_t *msg)
 			tstatus.heartbeat_time = tstatus.timestamp;
 
 			if (_telemetry_status_pub == nullptr) {
-				_telemetry_status_pub = orb_advertise_multi(ORB_ID(telemetry_status), &tstatus, NULL, ORB_PRIO_HIGH);
+				int multi_instance;
+				_telemetry_status_pub = orb_advertise_multi(ORB_ID(telemetry_status), &tstatus, &multi_instance, ORB_PRIO_HIGH);
 
 			} else {
 				orb_publish(ORB_ID(telemetry_status), _telemetry_status_pub, &tstatus);
@@ -1813,9 +1814,12 @@ MavlinkReceiver::receive_thread(void *arg)
 
 			struct sockaddr_in * srcaddr_last = _mavlink->get_client_source_address();
 			int localhost = (127 << 24) + 1;
-			if (srcaddr_last->sin_addr.s_addr == htonl(localhost) && srcaddr.sin_addr.s_addr != htonl(localhost)) {
+			if ((srcaddr_last->sin_addr.s_addr == htonl(localhost) && srcaddr.sin_addr.s_addr != htonl(localhost))
+					|| (_mavlink->get_mode() == Mavlink::MAVLINK_MODE_ONBOARD && !_mavlink->get_client_source_initialized())) {
 				// if we were sending to localhost before but have a new host then accept him
 				memcpy(srcaddr_last, &srcaddr, sizeof(srcaddr));
+				PX4_WARN("UDP source addr changed: %s", inet_ntoa(srcaddr.sin_addr));
+				_mavlink->set_client_source_initialized();
 			}
 #endif
 			/* if read failed, this loop won't execute */
