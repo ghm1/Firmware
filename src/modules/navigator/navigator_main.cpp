@@ -523,6 +523,7 @@ Navigator::task_main()
 		}
 
 		/* iterate through navigation modes and set active/inactive for each */
+        //ghm1: we run the virtual baseclass functions of the actual mode. this executes the helper navigators.
 		for (unsigned int i = 0; i < NAVIGATOR_MODE_ARRAY_SIZE; i++) {
 			_navigation_mode_array[i]->run(_navigation_mode == _navigation_mode_array[i]);
 		}
@@ -536,6 +537,7 @@ Navigator::task_main()
 			_pos_sp_triplet_updated = true;
 		}
 
+        //ghm1: we publish the resulting new setpoint for the controllers to be used
 		if (_pos_sp_triplet_updated) {
 			publish_position_setpoint_triplet();
 			_pos_sp_triplet_updated = false;

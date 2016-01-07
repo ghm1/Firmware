@@ -95,6 +95,7 @@
 #include <uORB/topics/vehicle_land_detected.h>
 #include <uORB/topics/input_rc.h>
 #include <uORB/topics/vehicle_command_ack.h>
+#include <uORB/topics/target_land_position.h>
 
 #include <drivers/drv_led.h>
 #include <drivers/drv_hrt.h>
@@ -426,7 +427,7 @@ int commander_main(int argc, char *argv[])
 				cmd.command = vehicle_command_s::VEHICLE_CMD_NAV_TAKEOFF;
 				// cmd.param1 = 0.25f; /* minimum pitch */
 				// /* param 2-3 unused */
-				// cmd.param4 = home_position.yaw;
+                //cmd.param4 = home_position.yaw;
 				// cmd.param5 = home_position.lat;
 				// cmd.param6 = home_position.lon;
 				// cmd.param7 = home_position.alt;
@@ -449,24 +450,59 @@ int commander_main(int argc, char *argv[])
 	if (!strcmp(argv[1], "land")) {
 		int mavlink_fd_local = px4_open(MAVLINK_LOG_DEVICE, 0);
 
-		vehicle_command_s cmd = {};
-		cmd.target_system = status.system_id;
-		cmd.target_component = status.component_id;
+        if (status.condition_home_position_valid) {
 
-		cmd.command = vehicle_command_s::VEHICLE_CMD_NAV_LAND;
-		// cmd.param1 = 0.25f; /* minimum pitch */
-		// /* param 2-3 unused */
-		// cmd.param4 = home_position.yaw;
-		// cmd.param5 = home_position.lat;
-		// cmd.param6 = home_position.lon;
-		// cmd.param7 = home_position.alt;
+            vehicle_command_s cmd = {};
+            cmd.target_system = status.system_id;
+            cmd.target_component = status.component_id;
 
-		// XXX inspect use of publication handle
-		(void)orb_advertise(ORB_ID(vehicle_command), &cmd);
+            cmd.command = vehicle_command_s::VEHICLE_CMD_NAV_LAND;
+//            cmd.param1 = 0.25f; /* minimum pitch */
+//            /* param 2-3 unused */
+//            cmd.param4 = _home.yaw;
+//            cmd.param5 = _home.lat;
+//            cmd.param6 = _home.lon;
+//            cmd.param7 = _home.alt;
+
+            // XXX inspect use of publication handle
+            (void)orb_advertise(ORB_ID(vehicle_command), &cmd);
+        } else {
+            warnx("rejecting land, no target_land position.");
+        }
 
 		px4_close(mavlink_fd_local);
 		return 0;
 	}
+
+    /* land on a previously recognized target */
+    if (!strcmp(argv[1], "tarland")) {
+        int mavlink_fd_local = px4_open(MAVLINK_LOG_DEVICE, 0);
+
+        if (status.condition_target_land_position_valid && status.condition_global_position_valid) {
+
+            vehicle_command_s cmd = {};
+            cmd.target_system = status.system_id;
+            cmd.target_component = status.component_id;
+
+            cmd.command = vehicle_command_s::VEHICLE_CMD_NAV_LAND;
+//            cmd.param1 = 0.25f; /* minimum pitch */
+            //indicates, that we want to land on a known target (customized)
+            cmd.param2 = 1.0f;
+//            /* param3 unused */
+//            cmd.param4 = _home.yaw;
+//            cmd.param5 = _home.lat;
+//            cmd.param6 = _home.lon;
+//            cmd.param7 = _home.alt;
+
+            // XXX inspect use of publication handle
+            (void)orb_advertise(ORB_ID(vehicle_command), &cmd);
+        } else {
+            warnx("rejecting land, no home position.");
+        }
+
+        px4_close(mavlink_fd_local);
+        return 0;
+    }
 
 	usage("unrecognized command");
 	return 1;
@@ -912,13 +948,25 @@ bool handle_command(struct vehicle_status_s *status_local, const struct safety_s
 		}
 		break;
 
+    //ghm1test
 	case vehicle_command_s::VEHICLE_CMD_NAV_LAND: {
-			/* ok, home set, use it to take off */
-			if (TRANSITION_CHANGED == main_state_transition(&status, vehicle_status_s::MAIN_STATE_AUTO_LAND)) {
-				warnx("landing!");
-			} else {
-				warnx("landing denied");
-			}
+        //ghm1: param2 indicates, if we want to land on the known target or at current position
+            if( (int)cmd->param2 != 1 ) {
+                warnx("landing: param2 is %d", (int)cmd->param2 );
+                /* ok, home set, use it to take off */
+                if (TRANSITION_CHANGED == main_state_transition(&status, vehicle_status_s::MAIN_STATE_AUTO_LAND)) {
+                    warnx("landing!");
+                } else {
+                    warnx("landing denied");
+                }
+            } else {
+                //we try to land on the target
+                if (TRANSITION_CHANGED == main_state_transition(&status, vehicle_status_s::MAIN_STATE_TARGET_LAND)) {
+                    warnx("landing!");
+                } else {
+                    warnx("landing denied");
+                }
+            }
 
 		}
 		break;
@@ -1156,6 +1204,9 @@ int commander_thread_main(int argc, char *argv[])
 	status.avionics_power_rail_voltage = -1.0f;
 	status.usb_connected = false;
 
+    //init target_land_position_valid with false
+    status.condition_target_land_position_valid = false;
+
 	// CIRCUIT BREAKERS
 	status.circuit_breaker_engaged_power_check = false;
 	status.circuit_breaker_engaged_airspd_check = false;
@@ -1355,6 +1406,11 @@ int commander_thread_main(int argc, char *argv[])
 	memset(&vtol_status, 0, sizeof(vtol_status));
 	vtol_status.vtol_in_rw_mode = true;		//default for vtol is rotary wing
 
+    //ghm1test
+    /* Subscribe to target_land_topic */
+    int target_land_pos_sub = orb_subscribe(ORB_ID(target_land_position));
+    struct target_land_position_s target_land_pos;
+    memset(&target_land_pos, 0, sizeof(target_land_pos));
 
 	control_status_leds(&status, &armed, true);
 
@@ -1776,6 +1832,17 @@ int commander_thread_main(int argc, char *argv[])
 				status.condition_global_position_valid = true;
 			}
 		}
+
+        //ghm1todo: target_land_position updaten und im status target_land_position valid setzten
+        /* update target_land_position */
+        orb_check(target_land_pos_sub, &updated);
+        if (updated)
+        {
+            /* position changed */
+            orb_copy(ORB_ID(target_land_position), target_land_pos_sub, &target_land_pos);
+            //ghm1: set targe_land_position_valid. always valid as soon as we have a position from estimator
+            status.condition_target_land_position_valid = true;
+        }
 
 		/* update condition_local_position_valid and condition_local_altitude_valid */
 		/* hysteresis for EPH */
@@ -2272,6 +2339,7 @@ int commander_thread_main(int argc, char *argv[])
 				tune_negative(true);
 			}
 
+            //ghm1: jetzt wird es interessant
 			/* evaluate the main state machine according to mode switches */
 			transition_result_t main_res = set_main_state_rc(&status, &sp_man);
 
@@ -2400,6 +2468,7 @@ int commander_thread_main(int argc, char *argv[])
 			}
 		}
 
+        //ghm1: jetzt wirds interessant: test, ob wir ein vehicle command erhalten haben
 		/* handle commands last, as the system needs to be updated to handle them */
 		orb_check(cmd_sub, &updated);
 
@@ -2491,6 +2560,7 @@ int commander_thread_main(int argc, char *argv[])
 			arming_state_changed = false;
 		}
 
+        //ghm1: jetzt wirds interessant:
 		/* now set navigation state according to failsafe and main state */
 		bool nav_state_changed = set_nav_state(&status, (bool)datalink_loss_enabled,
 						       mission_result.finished,
@@ -2819,23 +2889,23 @@ set_main_state_rc(struct vehicle_status_s *status_local, struct manual_control_s
 
     //ghm1test
     /* target land switch overrides main switch */
-//    if (sp_man->return_switch == manual_control_setpoint_s::SWITCH_POS_ON) {
-//		res = main_state_transition(status_local,vehicle_status_s::MAIN_STATE_AUTO_RTL);
+    if (sp_man->target_land_switch == manual_control_setpoint_s::SWITCH_POS_ON) {
+        res = main_state_transition(status_local,vehicle_status_s::MAIN_STATE_TARGET_LAND);
 
-//		if (res == TRANSITION_DENIED) {
-//			print_reject_mode(status_local, "AUTO_RTL");
+        if (res == TRANSITION_DENIED) {
+            print_reject_mode(status_local, "TARGET_LAND");
 
-//			/* fallback to LOITER if home position not set */
-//			res = main_state_transition(status_local,vehicle_status_s::MAIN_STATE_AUTO_LOITER);
-//		}
+            /* fallback to LOITER if home position not set and target_land position not set */
+            res = main_state_transition(status_local,vehicle_status_s::MAIN_STATE_AUTO_LOITER);
+        }
 
-//		if (res != TRANSITION_DENIED) {
-//			/* changed successfully or already in this state */
-//			return res;
-//		}
+        if (res != TRANSITION_DENIED) {
+            /* changed successfully or already in this state */
+            return res;
+        }
 
-//		/* if we get here mode was rejected, continue to evaluate the main system mode */
-//	}
+        /* if we get here mode was rejected, continue to evaluate the main system mode */
+    }
 
 	/* offboard and RTL switches off or denied, check main mode switch */
 	switch (sp_man->mode_switch) {

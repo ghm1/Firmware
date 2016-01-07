@@ -359,6 +359,17 @@ main_state_transition(struct vehicle_status_s *status, main_state_t new_main_sta
 		}
 		break;
 
+    //ghm1test
+    case vehicle_status_s::MAIN_STATE_TARGET_LAND:
+        /* we need global position, home position and target_land position */
+        //ghm1test: todo status einführen condition_target_land_pos_valid
+        if (status->condition_global_position_valid &&
+                status->condition_home_position_valid &&
+                status->condition_target_land_position_valid ) {
+            ret = TRANSITION_CHANGED;
+        }
+        break;
+
 	case vehicle_status_s::MAIN_STATE_OFFBOARD:
 
 		/* need offboard signal */
@@ -786,6 +797,25 @@ bool set_nav_state(struct vehicle_status_s *status, const bool data_link_loss_en
 			status->nav_state = vehicle_status_s::NAVIGATION_STATE_LAND;
 		}
 		break;
+
+    case vehicle_status_s::MAIN_STATE_TARGET_LAND:
+        /* require global position and home */
+
+        if (status->engine_failure) {
+            status->nav_state = vehicle_status_s::NAVIGATION_STATE_AUTO_LANDENGFAIL;
+        } else if ((!status->condition_global_position_valid ||
+                    !status->condition_home_position_valid)) {
+            status->failsafe = true;
+
+            if (status->condition_local_altitude_valid) {
+                status->nav_state = vehicle_status_s::NAVIGATION_STATE_DESCEND;
+            } else {
+                status->nav_state = vehicle_status_s::NAVIGATION_STATE_TERMINATION;
+            }
+        } else {
+            status->nav_state = vehicle_status_s::NAVIGATION_STATE_LAND;
+        }
+        break;
 
 	case vehicle_status_s::MAIN_STATE_OFFBOARD:
 		/* require offboard control, otherwise stay where you are */

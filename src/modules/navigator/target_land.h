@@ -53,6 +53,9 @@
 
 class Navigator;
 
+//Ist das gespeicherte lande target zu alt, dann steigen auf alt, queren und landen.
+//Ist das target hingegen aktuell, nicht steigen, sondern nur queren und anschliessend landen.
+//Was auch cool wäre, wär wenn man während dem descending die sinkgeschwindigkeit beinflussen könnte.
 class TargetLand : public MissionBlock
 {
 public:

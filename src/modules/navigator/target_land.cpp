@@ -291,6 +291,7 @@ TargetLand::set_target_land_item()
 	mission_item_to_position_setpoint(&_mission_item, &pos_sp_triplet->current);
 	pos_sp_triplet->next.valid = false;
 
+    //ghm1: this makes the navigator publish the new position setpoint triplet
 	_navigator->set_position_setpoint_triplet_updated();
 }
 
