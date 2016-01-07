@@ -656,6 +656,16 @@ MulticopterPositionControl::task_main_trampoline(int argc, char *argv[])
 void
 MulticopterPositionControl::update_ref()
 {
+    //ghm1: jede lokale position bezieht sich auf eine referenz position im globalen koordinatensystem. jedesmal nach
+    //erhalt einer neuen lokalen position wird das _ref_pos objekt mit dieser referenzposition aktualisiert. das _ref_pos
+    //object kann anschliessend dazu verwendet werden, um eine lokale position ins globale koordinatensystem zu transformieren
+    //(map_projection_reproject) oder um eine globale position ins lokale koordinatensystem zu transformieren (map_projection_project)
+
+    //In dieser methode wird nach jedem update der lokalen position der position setpoint (_pos_sp) in das lokale koordinatensystem des neuen
+    //lokalen positionspunktes transformiert. dazu wird der setpoint zunächst mittels der alten lokalen referenz ins globale koordinatensystem
+    //transformiert. Anschliessend wird das Referenzsystem aus der neuen lokalen position extrahiert und mittels diesem der setpoint im globalen
+    //coordinatensystem in das neue lokale koordinatensystem transformiert.
+
     //ghm1: test, if timestamps are different, then we have to update -> wir haben eine neue local position erhalten
 	if (_local_pos.ref_timestamp != _ref_timestamp) {
 		double lat_sp, lon_sp;
@@ -670,7 +680,7 @@ MulticopterPositionControl::update_ref()
 		}
 
 		/* update local projection reference */
-        //ghm1: set _ref_pos to newly calculated values
+        //ghm1: set _ref_pos to new reference values
 		map_projection_init(&_ref_pos, _local_pos.ref_lat, _local_pos.ref_lon);
 		_ref_alt = _local_pos.ref_alt;
 
@@ -1202,7 +1212,7 @@ MulticopterPositionControl::task_main()
 	fds[0].fd = _local_pos_sub;
 	fds[0].events = POLLIN;
 
-    //ghm1: main loop beginnt, diese läuft immer im Kreis, alles bisher war initialisierung
+    //ghm1: main loop beginnt
 	while (!_task_should_exit) {
 		/* wait for up to 500ms for data */
 		int pret = px4_poll(&fds[0], (sizeof(fds) / sizeof(fds[0])), 500);

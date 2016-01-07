@@ -398,6 +398,7 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 
 	thread_running = true;
 
+    //ghm1: initialization of barometer height value: we average over a certain number of values (baro_init_num)
 	while (wait_baro && !thread_should_exit) {
 		int ret = px4_poll(&fds_init[0], 1, 1000);
 

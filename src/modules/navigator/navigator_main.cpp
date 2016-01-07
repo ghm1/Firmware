@@ -498,6 +498,10 @@ Navigator::task_main()
 				_pos_sp_triplet_published_invalid_once = false;
 				_navigation_mode = &_land;
 				break;
+            case vehicle_status_s::NAVIGATION_STATE_TARGET_LAND:
+                _pos_sp_triplet_published_invalid_once = false;
+                _navigation_mode = &_targetLand;
+                break;
 			case vehicle_status_s::NAVIGATION_STATE_AUTO_RTGS:
 				/* Use complex data link loss mode only when enabled via param
 				* otherwise use rtl */
@@ -537,7 +541,8 @@ Navigator::task_main()
 			_pos_sp_triplet_updated = true;
 		}
 
-        //ghm1: we publish the resulting new setpoint for the controllers to be used
+        //ghm1: we publish the resulting new setpoint for the controllers to be used.
+        //This is updated in the run-method of the navigator_mode above
 		if (_pos_sp_triplet_updated) {
 			publish_position_setpoint_triplet();
 			_pos_sp_triplet_updated = false;

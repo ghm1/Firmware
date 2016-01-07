@@ -14,6 +14,7 @@
 #include <drivers/drv_hrt.h>
 #include <arch/board/board.h>
 #include <vector>
+#include <queue>
 #include <algorithm>
 #include <px4_config.h>
 //#include <nuttx/sched.h>
@@ -50,10 +51,16 @@ TargetShiftEstimator::TargetShiftEstimator()
       _local_pos_sub(-1),
       _pixy5pts_sub(-1),
       _ctrl_state_sub(-1),
-      _test(false)
+      _target_land_position_pub(nullptr),
+      _test1(false),
+      _test2(false),
+      _test3(true)
 {
     memset(&_ctrl_state, 0, sizeof(_ctrl_state));
     memset(&_local_pos, 0, sizeof(_local_pos));
+    memset(&_target_land_position, 0, sizeof(_target_land_position));
+
+    memset(&_ref_pos, 0, sizeof(_ref_pos));
 }
 
 TargetShiftEstimator::~TargetShiftEstimator()
@@ -110,8 +117,17 @@ TargetShiftEstimator::task_main_trampoline(int argc, char *argv[])
 void
 TargetShiftEstimator::task_main()
 {
-    if(!_test)
-    {
+    if(_test1) {
+        warnx("[target_shift_estimator] test1\n");
+        //we make test calculations from test points and output result. no usage of global position.
+        test1();
+    }
+    else if(_test2) {
+        warnx("[target_shift_estimator] test1\n");
+        //we publish a define public land position
+        test2();
+    }
+    else {
         warnx("[target_shift_estimator] starting\n");
 
         //subscribe to topics an make a first poll
@@ -131,7 +147,7 @@ TargetShiftEstimator::task_main()
 
             /* timed out - periodic check for _task_should_exit */
             if (pret == 0) {
-                warnx("[target_shift_estimator] poll timeout");
+                //warnx("[target_shift_estimator] poll timeout");
                 continue;
             }
 
@@ -143,6 +159,10 @@ TargetShiftEstimator::task_main()
 
             //check if we have new messages on topics
             poll_subscriptions();
+
+            //if we dont have valid local position reference continue
+            if( _local_pos.xy_valid == true && _local_pos.z_valid )
+                continue;
 
 //            int count = _pixy5pts.count;
 //            if(count == 4)
@@ -156,13 +176,52 @@ TargetShiftEstimator::task_main()
 
             //do calculation
             calculateTargetToCameraShift();
+
+            //if we dont have a valid target continue
+            if( !_target.valid )
+                continue;
+
+            //calculate yaw
+            float yaw = atan2(_target.F(1), _target.F(0));
+
+            //Add shift to local position. As we are in a Body-NED frame it is just a summation.
+            _targetPosGlobal(0) = _shift_xyz(0) + _local_pos.x;
+            _targetPosGlobal(1) = _shift_xyz(1) + _local_pos.y;
+            _targetPosGlobal(2) = _shift_xyz(2) + _local_pos.z;  //we are in NED, z is negative
+
+            /* update local projection reference */
+            map_projection_init(&_ref_pos, _local_pos.ref_lat, _local_pos.ref_lon);
+
+            //project target position to global frame
+            double est_lat, est_lon;
+            map_projection_reproject(&_ref_pos, _targetPosGlobal(0), _targetPosGlobal(1), &est_lat, &est_lon);
+            float est_alt = -(_targetPosGlobal(2) - _local_pos.ref_alt);
+
+            //assign target_land_position
+            //ghm1todo
+            _target_land_position.timestamp = hrt_absolute_time();
+            _target_land_position.lat = est_lat;
+            _target_land_position.lon = est_lon;
+            _target_land_position.alt = est_alt;
+            _target_land_position.x = 0.0f;
+            _target_land_position.y = 0.0f;
+            _target_land_position.z = 0.0f;
+            _target_land_position.yaw = yaw;
+            _target_land_position.direction_x = 0.0f;
+            _target_land_position.direction_y = 0.0f;
+            _target_land_position.direction_z = 0.0f;
+
+            //send new target land position over uorb
+            if (_target_land_position_pub == nullptr) {
+                _target_land_position_pub = orb_advertise(ORB_ID(target_land_position), &_target_land_position);
+
+            } else {
+                /* publish it */
+                orb_publish(ORB_ID(target_land_position), _target_land_position_pub, &_target_land_position);
+            }
         }
     }
-    else
-    {
-        warnx("[target_shift_estimator] test\n");
-        test();
-    }
+
 
     warnx("[target_shift_estimator] exiting.\n");
     _control_task = -1;
@@ -209,7 +268,7 @@ TargetShiftEstimator::calculateTargetToCameraShift()
 {
     if(_pixy5pts.count == 4)
     {
-        //rotate points into orthogonal camera (timestamps should be similar)
+        //rotate points into NED frame (orthogonal camera rotated about z-axis)  (timestamps should be similar)
         math::Quaternion q_att(_ctrl_state.q[0], _ctrl_state.q[1], _ctrl_state.q[2], _ctrl_state.q[3]);
         math::Matrix<3, 3> R = q_att.to_dcm();
         //warnx("%.2f %.2f %.2f", (double)R(0,0), (double)R(0,1), (double)R(0,2));
@@ -250,7 +309,7 @@ TargetShiftEstimator::calculateTargetToCameraShift()
             _target.valid = false;
 
             //warnx("distLR: %.2f", (double)_target.distLR);
-            //warnx("_shift_xyz: x= %.2f, y= %.2f, z=%.2f ", (double)_shift_xyz(0), (double)_shift_xyz(1), (double)_shift_xyz(2) );
+            warnx("_shift_xyz: x= %.2f, y= %.2f, z=%.2f ", (double)_shift_xyz(0), (double)_shift_xyz(1), (double)_shift_xyz(2) );
         }
     }
 }
@@ -373,7 +432,7 @@ TargetShiftEstimator::targetCompare(const Target& lhs, const Target& rhs)
 }
 
 bool
-TargetShiftEstimator::test()
+TargetShiftEstimator::test1()
 {
     struct camera_pixy5pts_s testPts;
     testPts.count = 4;
@@ -404,7 +463,6 @@ TargetShiftEstimator::test()
     test_ctrl_state.q[2] = q(2);
     test_ctrl_state.q[3] = q(3);
 
-    _test = true;
     _pixy5pts = testPts;
     _ctrl_state = test_ctrl_state;
 
@@ -446,6 +504,92 @@ TargetShiftEstimator::test()
         warnx("_shift_xyz: x= %.2f, y= %.2f, z=%.2f ", (double)_shift_xyz(0), (double)_shift_xyz(1), (double)_shift_xyz(2) );
 
     }
+
+    return OK;
+}
+
+bool
+TargetShiftEstimator::test2()
+{
+    while(!_task_should_exit)
+    {
+        //time to calculate, simulates poll
+        usleep(20000); //20ms
+
+        //assign target_land_position
+        //ghm1todo
+        _target_land_position.timestamp = hrt_absolute_time();
+        _target_land_position.lat = 47.3668;
+        _target_land_position.lon = 8.55;
+        _target_land_position.alt = 0.054;
+        _target_land_position.x = 0.0f;
+        _target_land_position.y = 0.0f;
+        _target_land_position.z = 0.0f;
+
+        _target_land_position.yaw = - 3.14;
+        _target_land_position.direction_x = 0.0f;
+        _target_land_position.direction_y = 0.0f;
+        _target_land_position.direction_z = 0.0f;
+
+        //send new target land position over uorb
+        if (_target_land_position_pub == nullptr) {
+            _target_land_position_pub = orb_advertise(ORB_ID(target_land_position), &_target_land_position);
+
+        } else {
+            /* publish it */
+            orb_publish(ORB_ID(target_land_position), _target_land_position_pub, &_target_land_position);
+        }
+    }
+    return OK;
+}
+
+bool
+TargetShiftEstimator::test3()
+{
+//    //we add a constant offset to home position with an additional random noise
+//    //lets see how it reacts
+
+//    //subsrcibe to home pos
+//    struct home_position_s home_pos;
+//    memset(&home_pos, 0, sizeof(home_pos));
+//    int home_position_sub = orb_subscribe( ORB_ID(home_position) );
+
+//    //offset to home
+//    float x_offs = 5.0f;
+//    float y_offs = 2.0f;
+//    float z_offs = 0.0f;
+//    float yaw_offs = 3.14f;
+
+//    while(!_task_should_exit)
+//    {
+//        bool updated = false;
+
+//        orb_check(home_position_sub, &updated);
+//        if (updated) {
+//            //warnx("control_state updated");
+//            orb_copy(ORB_ID(home_position), home_position_sub, &home_pos);
+//        }
+
+//        float x = home_pos.x + x_offs + (( rand() % 10 - 4) / 10 );
+//        float y = home_pos.y + y_offs + (( rand() % 10 - 4) / 10 );
+//        float z = home_pos.z + z_offs + (( rand() % 10 - 4) / 10 );
+//        float yaw = yaw_offs + yaw_offs + (( rand() % 10 - 4) / 10 );
+
+//        //we want to see it for some time before publish (mean over fifo-buffer)
+
+//        //reproject to global frame
+
+//        //send new target land position over uorb
+//        if (_target_land_position_pub == nullptr) {
+//            _target_land_position_pub = orb_advertise(ORB_ID(target_land_position), &_target_land_position);
+
+//        } else {
+//            /* publish it */
+//            orb_publish(ORB_ID(target_land_position), _target_land_position_pub, &_target_land_position);
+//        }
+//        //time to calculate, simulates poll
+//        usleep(20000); //20ms
+//    }
 
     return OK;
 }

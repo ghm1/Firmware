@@ -90,18 +90,21 @@ TargetLand::on_activation()
         /* for safety reasons don't go into TARGET_LAND if landed */
 		if (_navigator->get_vstatus()->condition_landed) {
             _target_land_state = TARGET_LAND_STATE_LANDED;
+            warnx("[TargetLand] on_activation: TARGET_LAND_STATE_LANDED");
             mavlink_log_critical(_navigator->get_mavlink_fd(), "no TARGET_LAND when landed");
 
 		/* if lower than return altitude, climb up first */
         } else if (_navigator->get_global_position()->alt < _navigator->get_target_land_position()->alt
 			   + _param_return_alt.get()) {
             _target_land_state = TARGET_LAND_STATE_CLIMB;
+            warnx("[TargetLand] on_activation: TARGET_LAND_STATE_CLIMB");
             _target_land_start_lock = false;
 
 		/* otherwise go straight to return */
 		} else {
 			/* set altitude setpoint to current altitude */
             _target_land_state = TARGET_LAND_STATE_RETURN;
+            warnx("[TargetLand] on_activation: TARGET_LAND_STATE_RETURN");
 			_mission_item.altitude_is_relative = false;
 			_mission_item.altitude = _navigator->get_global_position()->alt;
             _target_land_start_lock = false;
@@ -137,6 +140,7 @@ TargetLand::set_target_land_item()
 
     switch (_target_land_state) {
     case TARGET_LAND_STATE_CLIMB: {
+        //we climb at the current position to our target heigth
         float climb_alt = _navigator->get_target_land_position()->alt + _param_return_alt.get();
 
 		_mission_item.lat = _navigator->get_global_position()->lat;
@@ -160,6 +164,7 @@ TargetLand::set_target_land_item()
 	}
 
     case TARGET_LAND_STATE_RETURN: {
+        //we are at target height. lets fly to our target lat/lon position
         _mission_item.lat = _navigator->get_target_land_position()->lat;
         _mission_item.lon = _navigator->get_target_land_position()->lon;
 		 // don't change altitude
@@ -194,6 +199,7 @@ TargetLand::set_target_land_item()
 	}
 
     case TARGET_LAND_STATE_DESCEND: {
+        //we previously reached our target lat/lon position. Now we descent, but still correct x/y position.
         _mission_item.lat = _navigator->get_target_land_position()->lat;
         _mission_item.lon = _navigator->get_target_land_position()->lon;
 		_mission_item.altitude_is_relative = false;
@@ -257,7 +263,7 @@ TargetLand::set_target_land_item()
 		_mission_item.autocontinue = true;
 		_mission_item.origin = ORIGIN_ONBOARD;
 
-        mavlink_log_critical(_navigator->get_mavlink_fd(), "TARGET_LAND: land at home");
+        mavlink_log_critical(_navigator->get_mavlink_fd(), "TARGET_LAND: land at target");
 		break;
 	}
 
@@ -298,31 +304,38 @@ TargetLand::set_target_land_item()
 void
 TargetLand::advance_target_land()
 {
+    //Wir benötigen noch einen mechanismus, der sinken verlangsamt je näher wir dem target sind.
+    //Darin evtl. auch sinken stoppen, wenn Abweichung vom Target zu gross.
     switch (_target_land_state) {
     case TARGET_LAND_STATE_CLIMB:
         _target_land_state = TARGET_LAND_STATE_RETURN;
+        warnx("[TargetLand] advance_target_land: TARGET_LAND_STATE_RETURN");
 		break;
 
     case TARGET_LAND_STATE_RETURN:
         _target_land_state = TARGET_LAND_STATE_DESCEND;
+        warnx("[TargetLand] advance_target_land: TARGET_LAND_STATE_DESCEND");
 		break;
 
     case TARGET_LAND_STATE_DESCEND:
 		/* only go to land if autoland is enabled */
 		if (_param_land_delay.get() < -DELAY_SIGMA || _param_land_delay.get() > DELAY_SIGMA) {
             _target_land_state = TARGET_LAND_STATE_LOITER;
-
-		} else {
+            warnx("[TargetLand] advance_target_land: TARGET_LAND_STATE_LOITER");
+        } else {
             _target_land_state = TARGET_LAND_STATE_LAND;
+            warnx("[TargetLand] advance_target_land: TARGET_LAND_STATE_LAND");
 		}
 		break;
 
     case TARGET_LAND_STATE_LOITER:
         _target_land_state = TARGET_LAND_STATE_LAND;
+        warnx("[TargetLand] advance_target_land: TARGET_LAND_STATE_LAND");
 		break;
 
     case TARGET_LAND_STATE_LAND:
         _target_land_state = TARGET_LAND_STATE_LANDED;
+        warnx("[TargetLand] advance_target_land: TARGET_LAND_STATE_LANDED");
 		break;
 
 	default:

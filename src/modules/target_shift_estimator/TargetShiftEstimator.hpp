@@ -7,6 +7,10 @@
 #include <uORB/topics/control_state.h>
 #include <uORB/topics/vehicle_local_position.h>
 #include <uORB/topics/camera_pixy5pts.h>
+#include <uORB/topics/target_land_position.h>
+#include <uORB/topics/home_position.h>
+
+#include <geo/geo.h>
 
 namespace shift_estimator
 {
@@ -55,8 +59,9 @@ namespace shift_estimator
          *
          * @return		OK on success.
          */
-        bool    test();
-
+        bool    test1();
+        bool    test2();
+        bool    test3();
 
     private:
         bool		_task_should_exit;		/**< if true, task should exit */
@@ -66,15 +71,23 @@ namespace shift_estimator
         int     _pixy5pts_sub;
         int     _ctrl_state_sub;
 
+        orb_advert_t _target_land_position_pub;
+
         struct vehicle_local_position_s			_local_pos;		/**< vehicle local position */
         struct camera_pixy5pts_s                _pixy5pts;
         struct control_state_s                  _ctrl_state;
+        struct target_land_position_s           _target_land_position;
 
         struct Target                           _target;
-        bool                                    _test;              //function test active
+        bool                                    _test1;              //function test active (only debug)
+        bool                                    _test2;              //function test active (only debug)
+        bool                                    _test3;              //function test active (only debug)
         std::vector<math::Vector<3>>            _rotPts;            //vector of points after rotation
         std::vector<Target>                     _targetCandidates;  //vector of target candidates
         math::Vector<3>                         _shift_xyz;
+        math::Vector<3>                         _targetPosGlobal;
+
+        struct map_projection_reference_s _ref_pos;
 
         /**
          * Shim for calling task_main from task_create.

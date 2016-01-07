@@ -366,6 +366,7 @@ main_state_transition(struct vehicle_status_s *status, main_state_t new_main_sta
         if (status->condition_global_position_valid &&
                 status->condition_home_position_valid &&
                 status->condition_target_land_position_valid ) {
+            warnx("[commander] main_state_transition: changed to MAIN_STATE_TARGET_LAND");
             ret = TRANSITION_CHANGED;
         }
         break;
@@ -813,7 +814,8 @@ bool set_nav_state(struct vehicle_status_s *status, const bool data_link_loss_en
                 status->nav_state = vehicle_status_s::NAVIGATION_STATE_TERMINATION;
             }
         } else {
-            status->nav_state = vehicle_status_s::NAVIGATION_STATE_LAND;
+            status->nav_state = vehicle_status_s::NAVIGATION_STATE_TARGET_LAND;
+            //warnx("[commander] set_nav_state: nav_state set to NAVIGATION_STATE_TARGET_LAND");
         }
         break;
 

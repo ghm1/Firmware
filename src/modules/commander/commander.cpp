@@ -467,7 +467,7 @@ int commander_main(int argc, char *argv[])
             // XXX inspect use of publication handle
             (void)orb_advertise(ORB_ID(vehicle_command), &cmd);
         } else {
-            warnx("rejecting land, no target_land position.");
+            warnx("rejecting land, no home position.");
         }
 
 		px4_close(mavlink_fd_local);
@@ -497,7 +497,7 @@ int commander_main(int argc, char *argv[])
             // XXX inspect use of publication handle
             (void)orb_advertise(ORB_ID(vehicle_command), &cmd);
         } else {
-            warnx("rejecting land, no home position.");
+            warnx("rejecting land, no target land position.");
         }
 
         px4_close(mavlink_fd_local);
@@ -955,14 +955,15 @@ bool handle_command(struct vehicle_status_s *status_local, const struct safety_s
                 warnx("landing: param2 is %d", (int)cmd->param2 );
                 /* ok, home set, use it to take off */
                 if (TRANSITION_CHANGED == main_state_transition(&status, vehicle_status_s::MAIN_STATE_AUTO_LAND)) {
-                    warnx("landing!");
+                    warnx("[commander] handle_command: landing initialized");
                 } else {
                     warnx("landing denied");
                 }
             } else {
+                warnx("landing: param2 is %d", (int)cmd->param2 );
                 //we try to land on the target
                 if (TRANSITION_CHANGED == main_state_transition(&status, vehicle_status_s::MAIN_STATE_TARGET_LAND)) {
-                    warnx("landing!");
+                    warnx("[commander] handle_command: target landing initialized");
                 } else {
                     warnx("landing denied");
                 }
@@ -1840,8 +1841,16 @@ int commander_thread_main(int argc, char *argv[])
         {
             /* position changed */
             orb_copy(ORB_ID(target_land_position), target_land_pos_sub, &target_land_pos);
+            if(status.condition_target_land_position_valid == false) {
+                //ghm1: first set -> output
+                warnx("[commander] target_land_position valid");
+                warnx("[commander] target_land lat: %.3f", target_land_pos.lat);
+                warnx("[commander] target_land lon: %.3f", target_land_pos.lon);
+                warnx("[commander] target_land alt: %.3f", (double)target_land_pos.alt);
+            }
             //ghm1: set targe_land_position_valid. always valid as soon as we have a position from estimator
             status.condition_target_land_position_valid = true;
+            //warnx("[commander] target_land_position valid");
         }
 
 		/* update condition_local_position_valid and condition_local_altitude_valid */
