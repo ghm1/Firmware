@@ -61,7 +61,9 @@ TargetLand::TargetLand(Navigator *navigator, const char *name) :
     _target_land_start_lock(false),
     _param_return_alt(this, "TARGET_LAND_RETURN_ALT", false),
     _param_descend_alt(this, "TARGET_LAND_DESCEND_ALT", false),
-    _param_land_delay(this, "TARGET_LAND_LAND_DELAY", false)
+    _param_land_delay(this, "TARGET_LAND_LAND_DELAY", false),
+    _param_acc_radius_at_alt(this, "TARGET_LAND_ACC_RAD_AT_ALT", false),
+    _param_acc_radius_over_target(this, "TARGET_LAND_ACC_RAD_OVER_TARGET", false)
 {
 	/* load initial params */
 	updateParams();
@@ -118,6 +120,8 @@ TargetLand::on_activation()
 void
 TargetLand::on_active()
 {
+    //ghm1: if the mission item is reached or we have finished landing then call the statemachine,
+    //define the next mission item and set it as next setpoint in position setpoint triplet (in navigator)
     if (_target_land_state != TARGET_LAND_STATE_LANDED && is_mission_item_reached()) {
         advance_target_land();
         set_target_land_item();
@@ -151,7 +155,7 @@ TargetLand::set_target_land_item()
 		_mission_item.loiter_radius = _navigator->get_loiter_radius();
 		_mission_item.loiter_direction = 1;
 		_mission_item.nav_cmd = NAV_CMD_WAYPOINT;
-		_mission_item.acceptance_radius = _navigator->get_acceptance_radius();
+        _mission_item.acceptance_radius = _navigator->get_acceptance_radius();
 		_mission_item.time_inside = 0.0f;
 		_mission_item.pitch_min = 0.0f;
 		_mission_item.autocontinue = true;
@@ -184,8 +188,8 @@ TargetLand::set_target_land_item()
 		_mission_item.loiter_radius = _navigator->get_loiter_radius();
 		_mission_item.loiter_direction = 1;
 		_mission_item.nav_cmd = NAV_CMD_WAYPOINT;
-		_mission_item.acceptance_radius = _navigator->get_acceptance_radius();
-		_mission_item.time_inside = 0.0f;
+        _mission_item.acceptance_radius = _navigator->get_acceptance_radius();
+        _mission_item.time_inside = 0.0f;
 		_mission_item.pitch_min = 0.0f;
 		_mission_item.autocontinue = true;
 		_mission_item.origin = ORIGIN_ONBOARD;
@@ -198,25 +202,49 @@ TargetLand::set_target_land_item()
 		break;
 	}
 
+    case TARGET_LAND_STATE_ADJUST_YAW: {
+        //we are at target height. lets fly to our target lat/lon position
+        _mission_item.lat = _navigator->get_target_land_position()->lat;
+        _mission_item.lon = _navigator->get_target_land_position()->lon;
+         // don't change altitude, but new yaw
+        _mission_item.yaw = _navigator->get_target_land_position()->yaw;
+        _mission_item.loiter_radius = _navigator->get_loiter_radius();
+        _mission_item.loiter_direction = 1;
+        _mission_item.nav_cmd = NAV_CMD_LOITER_TIME_LIMIT;
+        _mission_item.acceptance_radius = _param_acc_radius_at_alt.get();
+        _mission_item.time_inside = 0.0f;
+        _mission_item.pitch_min = 0.0f;
+        _mission_item.autocontinue = true;
+        _mission_item.origin = ORIGIN_ONBOARD;
+
+        mavlink_log_critical(_navigator->get_mavlink_fd(), "TARGET_LAND: adjust yaw to %.2f",
+            (double)(_mission_item.yaw));
+
+        _target_land_start_lock = true;
+        break;
+    }
+
     case TARGET_LAND_STATE_DESCEND: {
         //we previously reached our target lat/lon position. Now we descent, but still correct x/y position.
         _mission_item.lat = _navigator->get_target_land_position()->lat;
         _mission_item.lon = _navigator->get_target_land_position()->lon;
 		_mission_item.altitude_is_relative = false;
+        //go down to _param_descend_alt above our target
         _mission_item.altitude = _navigator->get_target_land_position()->alt + _param_descend_alt.get();
         _mission_item.yaw = _navigator->get_target_land_position()->yaw;
 		_mission_item.loiter_radius = _navigator->get_loiter_radius();
 		_mission_item.loiter_direction = 1;
-		_mission_item.nav_cmd = NAV_CMD_LOITER_TIME_LIMIT;
-		_mission_item.acceptance_radius = _navigator->get_acceptance_radius();
+        //todo ? time limit?
+        _mission_item.nav_cmd = NAV_CMD_LOITER_TIME_LIMIT;
+        _mission_item.acceptance_radius = _param_acc_radius_at_alt.get();
 		_mission_item.time_inside = 0.0f;
 		_mission_item.pitch_min = 0.0f;
 		_mission_item.autocontinue = false;
 		_mission_item.origin = ORIGIN_ONBOARD;
 
-        mavlink_log_critical(_navigator->get_mavlink_fd(), "TARGET_LAND: descend to %d m (%d m above home)",
-			(int)(_mission_item.altitude),
-            (int)(_mission_item.altitude - _navigator->get_target_land_position()->alt));
+        mavlink_log_critical(_navigator->get_mavlink_fd(), "TARGET_LAND: descend to %.2f m (%.2f m above home)",
+            (double)(_mission_item.altitude),
+            (double)(_mission_item.altitude - _navigator->get_target_land_position()->alt));
 		break;
 	}
 
@@ -231,7 +259,7 @@ TargetLand::set_target_land_item()
 		_mission_item.loiter_radius = _navigator->get_loiter_radius();
 		_mission_item.loiter_direction = 1;
 		_mission_item.nav_cmd = autoland ? NAV_CMD_LOITER_TIME_LIMIT : NAV_CMD_LOITER_UNLIMITED;
-		_mission_item.acceptance_radius = _navigator->get_acceptance_radius();
+        _mission_item.acceptance_radius = _param_acc_radius_over_target.get();
 		_mission_item.time_inside = _param_land_delay.get() < 0.0f ? 0.0f : _param_land_delay.get();
 		_mission_item.pitch_min = 0.0f;
 		_mission_item.autocontinue = autoland;
@@ -252,12 +280,13 @@ TargetLand::set_target_land_item()
         _mission_item.lat = _navigator->get_target_land_position()->lat;
         _mission_item.lon = _navigator->get_target_land_position()->lon;
 		_mission_item.altitude_is_relative = false;
+        //now adjust target altitude
         _mission_item.altitude = _navigator->get_target_land_position()->alt;
         _mission_item.yaw = _navigator->get_target_land_position()->yaw;
 		_mission_item.loiter_radius = _navigator->get_loiter_radius();
 		_mission_item.loiter_direction = 1;
 		_mission_item.nav_cmd = NAV_CMD_LAND;
-		_mission_item.acceptance_radius = _navigator->get_acceptance_radius();
+        _mission_item.acceptance_radius = _param_acc_radius_over_target.get();
 		_mission_item.time_inside = 0.0f;
 		_mission_item.pitch_min = 0.0f;
 		_mission_item.autocontinue = true;
@@ -277,7 +306,7 @@ TargetLand::set_target_land_item()
 		_mission_item.loiter_radius = _navigator->get_loiter_radius();
 		_mission_item.loiter_direction = 1;
 		_mission_item.nav_cmd = NAV_CMD_IDLE;
-		_mission_item.acceptance_radius = _navigator->get_acceptance_radius();
+        _mission_item.acceptance_radius = _param_acc_radius_at_alt.get();
 		_mission_item.time_inside = 0.0f;
 		_mission_item.pitch_min = 0.0f;
 		_mission_item.autocontinue = true;
@@ -313,12 +342,24 @@ TargetLand::advance_target_land()
 		break;
 
     case TARGET_LAND_STATE_RETURN:
+        _target_land_state = TARGET_LAND_STATE_ADJUST_YAW;
+        warnx("[TargetLand] advance_target_land: TARGET_LAND_STATE_ADJUST_YAW");
+		break;
+
+    case TARGET_LAND_STATE_ADJUST_YAW:
         _target_land_state = TARGET_LAND_STATE_DESCEND;
         warnx("[TargetLand] advance_target_land: TARGET_LAND_STATE_DESCEND");
-		break;
+        break;
 
     case TARGET_LAND_STATE_DESCEND:
 		/* only go to land if autoland is enabled */
+        //ghm1: if we have a delay TARGET_LAND_LAND_DELAY parameterized,
+        //then we go to loiter state where time_inside will be parameterized to TARGET_LAND_LAND_DELAY
+        //and descend altitude will be parameterized to targetland alt + TARGET_LAND_DESCEND_ALT.
+        //As long as the Target is in field of view of the camera the relative heigth above the target
+        //should be correct if there are no fast height estimation drifts. We could additionally advertise
+        //the height above the target on the distance sensor topic (what happens, if it is not always valid).
+        //If we loose the target from the field of view we have to takeoff again until we can see it.
 		if (_param_land_delay.get() < -DELAY_SIGMA || _param_land_delay.get() > DELAY_SIGMA) {
             _target_land_state = TARGET_LAND_STATE_LOITER;
             warnx("[TargetLand] advance_target_land: TARGET_LAND_STATE_LOITER");

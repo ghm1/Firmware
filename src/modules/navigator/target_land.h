@@ -84,6 +84,7 @@ private:
         TARGET_LAND_STATE_NONE = 0,
         TARGET_LAND_STATE_CLIMB,
         TARGET_LAND_STATE_RETURN,
+        TARGET_LAND_STATE_ADJUST_YAW,
         TARGET_LAND_STATE_DESCEND,
         TARGET_LAND_STATE_LOITER,
         TARGET_LAND_STATE_LAND,
@@ -95,6 +96,9 @@ private:
 	control::BlockParamFloat _param_return_alt;
 	control::BlockParamFloat _param_descend_alt;
 	control::BlockParamFloat _param_land_delay;
+    /**< acceptance radius for loiter: point is reached, when copter inside this point */;
+    control::BlockParamFloat _param_acc_radius_at_alt;
+    control::BlockParamFloat _param_acc_radius_over_target;
 };
 
 #endif

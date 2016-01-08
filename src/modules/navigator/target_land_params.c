@@ -53,7 +53,7 @@
  * @max 150
  * @group Return To Land
  */
-PARAM_DEFINE_FLOAT(TARGET_LAND_RETURN_ALT, 5);
+PARAM_DEFINE_FLOAT(TARGET_LAND_RETURN_ALT, 10);
 
 
 /**
@@ -63,11 +63,11 @@ PARAM_DEFINE_FLOAT(TARGET_LAND_RETURN_ALT, 5);
  * Land (i.e. slowly descend) from this altitude if autolanding allowed.
  *
  * @unit meters
- * @min 2
+ * @min 1
  * @max 100
  * @group Return To Land
  */
-PARAM_DEFINE_FLOAT(TARGET_LAND_DESCEND_ALT, 2);
+PARAM_DEFINE_FLOAT(TARGET_LAND_DESCEND_ALT, 1);
 
 /**
  * TARGET_LAND delay
@@ -80,4 +80,27 @@ PARAM_DEFINE_FLOAT(TARGET_LAND_DESCEND_ALT, 2);
  * @max 300
  * @group Return To Land
  */
-PARAM_DEFINE_FLOAT(TARGET_LAND_LAND_DELAY, 1.0f);
+PARAM_DEFINE_FLOAT(TARGET_LAND_LAND_DELAY, 4.0f);
+
+/**
+ * TARGET_LAND Acceptance Radius at TARGET_LAND_RETURN_ALT over target
+ *
+ *
+ * @unit meter
+ * @min 0.05
+ * @max 5.0
+ * @group Mission
+ */
+PARAM_DEFINE_FLOAT(TARGET_LAND_ACC_RAD_AT_ALT, 0.5f);
+
+
+/**
+ * TARGET_LAND Acceptance Radius
+ *
+ *
+ * @unit meter
+ * @min 0.05
+ * @max 1.0
+ * @group Mission
+ */
+PARAM_DEFINE_FLOAT(TARGET_LAND_ACC_RAD_OVER_TARGET, 0.05f);

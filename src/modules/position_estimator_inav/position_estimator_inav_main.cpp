@@ -778,14 +778,18 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 
 				/* hysteresis for GPS quality */
 				if (gps_valid) {
+                    //ghm1: gps may be invalid by now. test it with the following line.
 					if (gps.eph > max_eph_epv || gps.epv > max_eph_epv || gps.fix_type < 3) {
 						gps_valid = false;
 						mavlink_log_info(mavlink_fd, "[inav] GPS signal lost");
 					}
 
 				} else {
+                    //ghm1: gps is expected to be invalid from the previous cycle. Test, if it is valid now with the following line
 					if (gps.eph < max_eph_epv * 0.7f && gps.epv < max_eph_epv * 0.7f && gps.fix_type >= 3) {
 						gps_valid = true;
+                        //ghm1: as the gps signal became valid, after it was invalid for a while, we have to reset our estimation in
+                        //the following lines. initialize it with a true reset_est
 						reset_est = true;
 						mavlink_log_info(mavlink_fd, "[inav] GPS signal found");
 					}
@@ -810,6 +814,8 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 							y_est[0] = 0.0f;
 							y_est[1] = gps.vel_e_m_s;
 
+                            //ghm1: also initialize the reference position in the local_position struct. this is also only done once
+                            //so that the reference is the same in any published local position.
 							local_pos.ref_lat = lat;
 							local_pos.ref_lon = lon;
 							local_pos.ref_alt = alt + z_est[0];
@@ -826,6 +832,8 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 					if (ref_inited) {
 						/* project GPS lat lon to plane */
 						float gps_proj[2];
+                        //ghm1: project our new lat/lon from gps to the lokal coordinate system using the global ref, which
+                        //has once been inited after the first time we got a valid gps signal
 						map_projection_project(&ref, lat, lon, &(gps_proj[0]), &(gps_proj[1]));
 
 						/* reset position estimate when GPS becomes good */

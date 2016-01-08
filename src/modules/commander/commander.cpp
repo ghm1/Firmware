@@ -897,9 +897,11 @@ bool handle_command(struct vehicle_status_s *status_local, const struct safety_s
 				/* announce new home position */
 				if (*home_pub != nullptr) {
 					orb_publish(ORB_ID(home_position), *home_pub, home);
+                    warnx("[commander] advertising home");
 
 				} else {
 					*home_pub = orb_advertise(ORB_ID(home_position), home);
+                    warnx("[commander] advertising home");
 				}
 
 				/* mark home position as set */
@@ -1040,9 +1042,11 @@ static void commander_set_home_position(orb_advert_t &homePub, home_position_s &
 	/* announce new home position */
 	if (homePub != nullptr) {
 		orb_publish(ORB_ID(home_position), homePub, &home);
+        warnx("[commander] advertising home");
 
 	} else {
 		homePub = orb_advertise(ORB_ID(home_position), &home);
+        warnx("[commander] advertising home");
 	}
 
 	//Play tune first time we initialize HOME
@@ -1842,7 +1846,7 @@ int commander_thread_main(int argc, char *argv[])
             /* position changed */
             orb_copy(ORB_ID(target_land_position), target_land_pos_sub, &target_land_pos);
             if(status.condition_target_land_position_valid == false) {
-                //ghm1: first set -> output
+                //ghm1: if first time make output
                 warnx("[commander] target_land_position valid");
                 warnx("[commander] target_land lat: %.3f", target_land_pos.lat);
                 warnx("[commander] target_land lon: %.3f", target_land_pos.lon);

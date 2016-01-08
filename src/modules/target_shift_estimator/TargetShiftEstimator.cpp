@@ -123,9 +123,14 @@ TargetShiftEstimator::task_main()
         test1();
     }
     else if(_test2) {
-        warnx("[target_shift_estimator] test1\n");
-        //we publish a define public land position
+        warnx("[target_shift_estimator] test2\n");
+        //we publish and define public land position to test landing state machine in simulation
         test2();
+    }
+    else if(_test3) {
+        warnx("[target_shift_estimator] test3\n");
+        //we use the home position plus an offset plus noise to check reaction of copter to scattering position estimations
+        test3();
     }
     else {
         warnx("[target_shift_estimator] starting\n");
@@ -546,50 +551,173 @@ TargetShiftEstimator::test2()
 bool
 TargetShiftEstimator::test3()
 {
-//    //we add a constant offset to home position with an additional random noise
-//    //lets see how it reacts
+    //we add a constant offset to home position with an additional random noise
+    //lets see how the copter reacts
 
-//    //subsrcibe to home pos
-//    struct home_position_s home_pos;
-//    memset(&home_pos, 0, sizeof(home_pos));
-//    int home_position_sub = orb_subscribe( ORB_ID(home_position) );
+    //subsrcibe to home pos
+    struct home_position_s home_pos;
+    memset(&home_pos, 0, sizeof(home_pos));
+    int home_position_sub = orb_subscribe( ORB_ID(home_position) );
+    //subscribe to local position for reprojection
+    _local_pos_sub = orb_subscribe(ORB_ID(vehicle_local_position));
 
-//    //offset to home
-//    float x_offs = 5.0f;
-//    float y_offs = 2.0f;
-//    float z_offs = 0.0f;
-//    float yaw_offs = 3.14f;
+    //offset to home -> target_land_position
+    float x_offs = 1.0f;
+    float y_offs = 2.0f;
+    float z_offs = 0.0f;
+    float yaw_offs = .0f;
 
-//    while(!_task_should_exit)
-//    {
-//        bool updated = false;
+    /* wakeup source */
+    px4_pollfd_struct_t fds[2];
 
-//        orb_check(home_position_sub, &updated);
-//        if (updated) {
-//            //warnx("control_state updated");
-//            orb_copy(ORB_ID(home_position), home_position_sub, &home_pos);
-//        }
+    fds[0].fd = home_position_sub;
+    fds[0].events = POLLIN;
 
-//        float x = home_pos.x + x_offs + (( rand() % 10 - 4) / 10 );
-//        float y = home_pos.y + y_offs + (( rand() % 10 - 4) / 10 );
-//        float z = home_pos.z + z_offs + (( rand() % 10 - 4) / 10 );
-//        float yaw = yaw_offs + yaw_offs + (( rand() % 10 - 4) / 10 );
+    bool homepos_valid = false;
+    while(!homepos_valid)
+    {
+        /* wait for up to 500ms for data */
+        int pret = px4_poll(&fds[0], (sizeof(fds) / sizeof(fds[0])), 500);
 
-//        //we want to see it for some time before publish (mean over fifo-buffer)
+        /* timed out - periodic check for _task_should_exit */
+        if (pret == 0) {
+            //warnx("[target_shift_estimator] poll timeout");
+            continue;
+        }
 
-//        //reproject to global frame
+        /* this is undesirable but not much we can do */
+        if (pret < 0) {
+            //warn("poll error %d, %d", pret, errno);
+            continue;
+        }
 
-//        //send new target land position over uorb
-//        if (_target_land_position_pub == nullptr) {
-//            _target_land_position_pub = orb_advertise(ORB_ID(target_land_position), &_target_land_position);
+        bool updated = false;
 
-//        } else {
-//            /* publish it */
-//            orb_publish(ORB_ID(target_land_position), _target_land_position_pub, &_target_land_position);
-//        }
-//        //time to calculate, simulates poll
-//        usleep(20000); //20ms
-//    }
+        orb_check(home_position_sub, &updated);
+        if (updated) {
+            warnx("[target_shift_estimator] home position updated");
+            orb_copy(ORB_ID(home_position), home_position_sub, &home_pos);
+        }
+
+        warnx("[target_shift_estimator] homepos: lat= %.5f, lon= %.5f, alt= %.5f", home_pos.lat, home_pos.lon, (double)home_pos.alt );
+
+        homepos_valid = true;
+    }
+
+
+    fds[0].fd = _local_pos_sub;
+    fds[0].events = POLLIN;
+
+    bool localpos_valid = false;
+    while(!localpos_valid)
+    {
+        /* wait for up to 500ms for data */
+        int pret = px4_poll(&fds[0], (sizeof(fds) / sizeof(fds[0])), 500);
+
+        /* timed out - periodic check for _task_should_exit */
+        if (pret == 0) {
+            //warnx("[target_shift_estimator] poll timeout");
+            continue;
+        }
+
+        /* this is undesirable but not much we can do */
+        if (pret < 0) {
+            //warn("poll error %d, %d", pret, errno);
+            continue;
+        }
+
+        bool updated = false;
+
+        orb_check(_local_pos_sub, &updated);
+        if (updated) {
+            warnx("[target_shift_estimator] local position updated");
+            orb_copy(ORB_ID(vehicle_local_position), _local_pos_sub, &_local_pos);
+        }
+
+        localpos_valid = true;
+    }
+
+    //get reference from local position (the reference is always the same)
+    //reproject position in lokal frame to global frame
+    /* update local projection reference */
+    map_projection_init( &_ref_pos, _local_pos.ref_lat, _local_pos.ref_lon );
+    float ref_alt = _local_pos.ref_alt;
+
+    //project homeposition to local frame
+    float x_home, y_home;
+    map_projection_project(&_ref_pos, home_pos.lat, home_pos.lon, &x_home, &y_home);
+    float z_home = -(home_pos.alt - ref_alt);
+
+    //add constant offsets
+    float x_target = x_home + x_offs;
+    float y_target = y_home + y_offs;
+    float z_target = z_home + z_offs;
+    float yaw_target = home_pos.yaw + yaw_offs;
+
+    while (!_task_should_exit)
+    {
+//        //add random noise from -0.05 ... +0.05 to detected offsets
+//        float x_n = ((float)( rand() % 20 - 9) / 100 );
+//        float y_n = ((float)( rand() % 20 - 9) / 100 );
+//        float z_n = ((float)( rand() % 20 - 9) / 100 );
+//        float yaw_n = ((float)( rand() % 20 - 9) / 100 );
+
+//        float x = x_target + x_n;
+//        float y = y_target + y_n;
+//        float z = z_target + z_n;
+//        float yaw = yaw_target + yaw_n;
+
+        float x = x_target;
+        float y = y_target;
+        float z = z_target;
+        float yaw = yaw_target;
+
+        //todo: we want to see it for some time before publish (mean over fifo-buffer)
+
+        //reproject target position to global frame
+        double est_lat, est_lon;
+        map_projection_reproject(&_ref_pos, x, y, &est_lat, &est_lon);
+        float est_alt = ref_alt - z;
+
+//        //test: project, to see if the small changes are still the same
+//        float x_rep, y_rep;
+//        map_projection_project(&_ref_pos, est_lat, est_lon, &x_rep, &y_rep);
+//        float z_rep = -(est_alt - ref_alt);
+
+//        //output difference
+//        float x_diff = x_rep - x_target;
+//        float y_diff = y_rep - y_target;
+//        float z_diff = z_rep - z_target;
+//        warnx("x_n rep: %.5f %.5f", (double)x_diff, (double)x_n );
+//        warnx("y_n rep: %.5f %.5f", (double)y_diff, (double)y_n );
+//        warnx("z_n rep: %.5f %.5f", (double)z_diff, (double)z_n );
+
+        //assignment of final global position
+        _target_land_position.timestamp = hrt_absolute_time();
+        _target_land_position.lat = est_lat;
+        _target_land_position.lon = est_lon;
+        _target_land_position.alt = est_alt;
+        _target_land_position.x = 0.0f;
+        _target_land_position.y = 0.0f;
+        _target_land_position.z = 0.0f;
+        _target_land_position.yaw = yaw;
+        _target_land_position.direction_x = 0.0f;
+        _target_land_position.direction_y = 0.0f;
+        _target_land_position.direction_z = 0.0f;
+
+        //warnx("[target_shift_estimator] tarlpos: x= %.5f, y= %.5f, z= %.5f", _target_land_position.lat, _target_land_position.lon, (double)_target_land_position.alt );
+
+        //send new target land position over uorb
+        if (_target_land_position_pub == nullptr) {
+            _target_land_position_pub = orb_advertise(ORB_ID(target_land_position), &_target_land_position);
+
+        } else {
+            /* publish it */
+            orb_publish(ORB_ID(target_land_position), _target_land_position_pub, &_target_land_position);
+        }
+
+        usleep(20000); //20ms
+    }
 
     return OK;
 }

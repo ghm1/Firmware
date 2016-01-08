@@ -999,7 +999,7 @@ void MulticopterPositionControl::control_auto(float dt)
     //ghm1: die folgende bedingung wird nur erfüllt, wenn der curr_sp zuvor finite war
 	if (current_setpoint_valid) {
 
-        //ghm1: im folgenden wird eine skalierung eingeführt. wird mit scaled multipliziert,
+        //ghm1: im folgenden wird eine skalierung eingeführt.
 		/* scaled space: 1 == position error resulting max allowed speed */
 		math::Vector<3> scale = _params.pos_p.edivide(_params.vel_max);	// TODO add mult param here
 
@@ -1033,6 +1033,7 @@ void MulticopterPositionControl::control_auto(float dt)
                     //ghm1: wir berücksichtigen die lage des nächsten punktes, um nicht vor dem errechen jedes current points die
                     //geschwindigkeit zu verlangsamen
 					if (_pos_sp_triplet.next.valid) {
+                        //warnx("[mc_pos_control] no next setpoint");
 						math::Vector<3> next_sp;
 						map_projection_project(&_ref_pos,
 								       _pos_sp_triplet.next.lat, _pos_sp_triplet.next.lon,
@@ -1074,6 +1075,7 @@ void MulticopterPositionControl::control_auto(float dt)
                     //wir suchen einen schnittpunkt einer kugel mit radius 1 um die aktuelle position mit der trajektorie, die prev und curr verbindet.
 					bool near = cross_sphere_line(pos_s, 1.0f, prev_sp_s, curr_sp_s, pos_sp_s);
 
+                    //warnx("[mc_pos_control] no next setpoint");
 					if (near) {
                         //d.h. wir sind nah genug an der trajektorie dran
 						/* unit sphere crosses trajectory */
@@ -1131,11 +1133,13 @@ void MulticopterPositionControl::control_auto(float dt)
 				&& (_pos - _pos_sp).length() < _pos_sp_triplet.current.acceptance_radius * 1.2f) {
 			_reset_pos_sp = false;
 			_reset_alt_sp = false;
+            //warnx("[mc_pos_control] dont reset setpoint");
 
 		/* otherwise: in case of interrupted mission don't go to waypoint but stay at current position */
 		} else {
 			_reset_pos_sp = true;
 			_reset_alt_sp = true;
+            //warnx("[mc_pos_control] reset setpoint");
 		}
 
 	} else {
