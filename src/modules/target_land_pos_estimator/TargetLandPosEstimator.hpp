@@ -1,5 +1,5 @@
-#ifndef TARGETSHIFTESTIMATOR_HPP
-#define TARGETSHIFTESTIMATOR_HPP
+#ifndef TARGETLANDPOSESTIMATOR_HPP
+#define TARGETLANDPOSESTIMATOR_HPP
 
 #include <mathlib/mathlib.h>
 #include <vector>
@@ -12,10 +12,10 @@
 
 #include <geo/geo.h>
 
-namespace shift_estimator
+namespace target_land_pos_estimator
 {
 
-    class TargetShiftEstimator
+    class TargetLandPosEstimator
     {
     public:
         struct Target
@@ -40,12 +40,12 @@ namespace shift_estimator
         /**
          * Constructor
          */
-        TargetShiftEstimator();
+        TargetLandPosEstimator();
 
         /**
          * Destructor, also kills task.
          */
-        ~TargetShiftEstimator();
+        ~TargetLandPosEstimator();
 
         /**
          * Start task.
@@ -120,7 +120,7 @@ namespace shift_estimator
     };
 
 
-    extern TargetShiftEstimator	*instance;
+    extern TargetLandPosEstimator	*instance;
 }
 
-#endif // TARGETSHIFTESTIMATOR_HPP
+#endif // TARGETLANDPOSESTIMATOR_HPP

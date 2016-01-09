@@ -35,7 +35,7 @@
  * @file pixy_cam.cpp
  * @author Michael Göttlicher
  *
- * Driver for an IR-Lock and Pixy vision sensor connected via I2C. Up to five
+ * Driver for an Pixy vision sensor connected via I2C. Up to five
  * points will be advertised over uorb
  *
  * Created on: Dez 12, 2015

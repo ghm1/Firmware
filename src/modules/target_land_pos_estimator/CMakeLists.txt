@@ -31,11 +31,11 @@
 #
 ############################################################################
 px4_add_module(
-	MODULE modules__target_shift_estimator
-	MAIN target_shift_estimator
+	MODULE modules__target_land_pos_estimator
+	MAIN target_land_pos_estimator
 	SRCS
-		target_shift_estimator.cpp
-		TargetShiftEstimator.cpp
+		target_land_pos_estimator.cpp
+		TargetLandPosEstimator.cpp
 	DEPENDS
 		platforms__common
 	)

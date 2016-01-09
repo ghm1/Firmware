@@ -26,14 +26,14 @@
 #include <mavlink/mavlink_log.h>
 #include <platforms/px4_defines.h>
 
-#include "TargetShiftEstimator.hpp"
+#include "TargetLandPosEstimator.hpp"
 
 //test diff #define TARGET_DISTANCE_L_R 2.0f
 //test results: -1.5, -1.0, 5.0
 #define TARGET_DISTANCE_L_R 0.25f
 
 
-using namespace shift_estimator;
+using namespace target_land_pos_estimator;
 
 /* oddly, ERROR is not defined for c++ */
 #ifdef ERROR
@@ -42,9 +42,9 @@ using namespace shift_estimator;
 static const int ERROR = -1;
 
 //global instance
-TargetShiftEstimator* instance;
+TargetLandPosEstimator* instance;
 
-TargetShiftEstimator::TargetShiftEstimator()
+TargetLandPosEstimator::TargetLandPosEstimator()
     : _task_should_exit(false),
       _control_task(-1),
       /* subscriptions */
@@ -63,7 +63,7 @@ TargetShiftEstimator::TargetShiftEstimator()
     memset(&_ref_pos, 0, sizeof(_ref_pos));
 }
 
-TargetShiftEstimator::~TargetShiftEstimator()
+TargetLandPosEstimator::~TargetLandPosEstimator()
 {
     if (_control_task != -1) {
         /* task wakes up every 100ms or so at the longest */
@@ -84,20 +84,20 @@ TargetShiftEstimator::~TargetShiftEstimator()
         } while (_control_task != -1);
     }
 
-    shift_estimator::instance = nullptr;
+    target_land_pos_estimator::instance = nullptr;
 }
 
 int
-TargetShiftEstimator::start()
+TargetLandPosEstimator::start()
 {
     ASSERT(_control_task == -1);
 
     /* start the task */
-    _control_task = px4_task_spawn_cmd("target_shift_estimator",
+    _control_task = px4_task_spawn_cmd("target_land_pos_estimator",
                        SCHED_DEFAULT,
                        SCHED_PRIORITY_DEFAULT,
                        4096,
-                       (px4_main_t)&TargetShiftEstimator::task_main_trampoline,
+                       (px4_main_t)&TargetLandPosEstimator::task_main_trampoline,
                        nullptr);
 
     if (_control_task < 0) {
@@ -109,31 +109,31 @@ TargetShiftEstimator::start()
 }
 
 void
-TargetShiftEstimator::task_main_trampoline(int argc, char *argv[])
+TargetLandPosEstimator::task_main_trampoline(int argc, char *argv[])
 {
-    shift_estimator::instance->task_main();
+    target_land_pos_estimator::instance->task_main();
 }
 
 void
-TargetShiftEstimator::task_main()
+TargetLandPosEstimator::task_main()
 {
     if(_test1) {
-        warnx("[target_shift_estimator] test1\n");
+        warnx("[target_land_pos_estimator] test1\n");
         //we make test calculations from test points and output result. no usage of global position.
         test1();
     }
     else if(_test2) {
-        warnx("[target_shift_estimator] test2\n");
+        warnx("[target_land_pos_estimator] test2\n");
         //we publish and define public land position to test landing state machine in simulation
         test2();
     }
     else if(_test3) {
-        warnx("[target_shift_estimator] test3\n");
+        warnx("[shift_estimator] test3\n");
         //we use the home position plus an offset plus noise to check reaction of copter to scattering position estimations
         test3();
     }
     else {
-        warnx("[target_shift_estimator] starting\n");
+        warnx("[shift_estimator] starting\n");
 
         //subscribe to topics an make a first poll
         make_subscriptions();
@@ -152,7 +152,7 @@ TargetShiftEstimator::task_main()
 
             /* timed out - periodic check for _task_should_exit */
             if (pret == 0) {
-                //warnx("[target_shift_estimator] poll timeout");
+                //warnx("[shift_estimator] poll timeout");
                 continue;
             }
 
@@ -228,12 +228,12 @@ TargetShiftEstimator::task_main()
     }
 
 
-    warnx("[target_shift_estimator] exiting.\n");
+    warnx("[shift_estimator] exiting.\n");
     _control_task = -1;
 }
 
 void
-TargetShiftEstimator::make_subscriptions()
+TargetLandPosEstimator::make_subscriptions()
 {
     //attitude from attitude controller
     _ctrl_state_sub = orb_subscribe(ORB_ID(control_state));
@@ -242,7 +242,7 @@ TargetShiftEstimator::make_subscriptions()
 }
 
 void
-TargetShiftEstimator::poll_subscriptions()
+TargetLandPosEstimator::poll_subscriptions()
 {
     bool updated = false;
 
@@ -269,7 +269,7 @@ TargetShiftEstimator::poll_subscriptions()
 }
 
 void
-TargetShiftEstimator::calculateTargetToCameraShift()
+TargetLandPosEstimator::calculateTargetToCameraShift()
 {
     if(_pixy5pts.count == 4)
     {
@@ -320,7 +320,7 @@ TargetShiftEstimator::calculateTargetToCameraShift()
 }
 
 void
-TargetShiftEstimator::identifyTargetPoints()
+TargetLandPosEstimator::identifyTargetPoints()
 {
     //We search for a target with the following shape: L = left, M = middle, R = right, F = direction point
     //************************************************
@@ -360,7 +360,7 @@ TargetShiftEstimator::identifyTargetPoints()
 }
 
 void
-TargetShiftEstimator::findTargetCandidate(const math::Vector<3>& L1, const math::Vector<3>& L2,
+TargetLandPosEstimator::findTargetCandidate(const math::Vector<3>& L1, const math::Vector<3>& L2,
                                           const math::Vector<3>& P1, const math::Vector<3>& P2 )
 {
     //direction vector u from L1 to L2
@@ -424,20 +424,20 @@ TargetShiftEstimator::findTargetCandidate(const math::Vector<3>& L1, const math:
     _targetCandidates.push_back(cand);
 }
 
-float TargetShiftEstimator::ptDistance(const math::Vector<3> &pt1, const math::Vector<3> &pt2)
+float TargetLandPosEstimator::ptDistance(const math::Vector<3> &pt1, const math::Vector<3> &pt2)
 {
     math::Vector<3> diff = pt1-pt2;
     return sqrt(diff(0)*diff(0) + diff(1)*diff(1) +  diff(2)*diff(2));
 }
 
 bool
-TargetShiftEstimator::targetCompare(const Target& lhs, const Target& rhs)
+TargetLandPosEstimator::targetCompare(const Target& lhs, const Target& rhs)
 {
     return lhs.distM < rhs.distM;
 }
 
 bool
-TargetShiftEstimator::test1()
+TargetLandPosEstimator::test1()
 {
     struct camera_norm_coords_s testPts;
     testPts.count = 4;
@@ -514,7 +514,7 @@ TargetShiftEstimator::test1()
 }
 
 bool
-TargetShiftEstimator::test2()
+TargetLandPosEstimator::test2()
 {
     while(!_task_should_exit)
     {
@@ -549,7 +549,7 @@ TargetShiftEstimator::test2()
 }
 
 bool
-TargetShiftEstimator::test3()
+TargetLandPosEstimator::test3()
 {
     //we add a constant offset to home position with an additional random noise
     //lets see how the copter reacts
@@ -581,7 +581,7 @@ TargetShiftEstimator::test3()
 
         /* timed out - periodic check for _task_should_exit */
         if (pret == 0) {
-            //warnx("[target_shift_estimator] poll timeout");
+            //warnx("[target_land_pos_estimator] poll timeout");
             continue;
         }
 
@@ -595,11 +595,11 @@ TargetShiftEstimator::test3()
 
         orb_check(home_position_sub, &updated);
         if (updated) {
-            warnx("[target_shift_estimator] home position updated");
+            warnx("[target_land_pos_estimator] home position updated");
             orb_copy(ORB_ID(home_position), home_position_sub, &home_pos);
         }
 
-        warnx("[target_shift_estimator] homepos: lat= %.5f, lon= %.5f, alt= %.5f", home_pos.lat, home_pos.lon, (double)home_pos.alt );
+        warnx("[target_land_pos_estimator] homepos: lat= %.5f, lon= %.5f, alt= %.5f", home_pos.lat, home_pos.lon, (double)home_pos.alt );
 
         homepos_valid = true;
     }
@@ -616,7 +616,7 @@ TargetShiftEstimator::test3()
 
         /* timed out - periodic check for _task_should_exit */
         if (pret == 0) {
-            //warnx("[target_shift_estimator] poll timeout");
+            //warnx("[target_land_pos_estimator] poll timeout");
             continue;
         }
 
@@ -630,7 +630,7 @@ TargetShiftEstimator::test3()
 
         orb_check(_local_pos_sub, &updated);
         if (updated) {
-            warnx("[target_shift_estimator] local position updated");
+            warnx("[target_land_pos_estimator] local position updated");
             orb_copy(ORB_ID(vehicle_local_position), _local_pos_sub, &_local_pos);
         }
 
@@ -705,7 +705,7 @@ TargetShiftEstimator::test3()
         _target_land_position.direction_y = 0.0f;
         _target_land_position.direction_z = 0.0f;
 
-        //warnx("[target_shift_estimator] tarlpos: x= %.5f, y= %.5f, z= %.5f", _target_land_position.lat, _target_land_position.lon, (double)_target_land_position.alt );
+        //warnx("[target_land_pos_estimator] tarlpos: x= %.5f, y= %.5f, z= %.5f", _target_land_position.lat, _target_land_position.lon, (double)_target_land_position.alt );
 
         //send new target land position over uorb
         if (_target_land_position_pub == nullptr) {

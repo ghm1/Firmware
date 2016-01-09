@@ -32,7 +32,7 @@
  ****************************************************************************/
 
 /**
- * @file target_shift_estimator.cpp
+ * @file target_land_pos_estimator.cpp
  * This application estimates the vehicle position relative to a detected target
  * by the pixy camera
  *
@@ -64,39 +64,39 @@
 #include <systemlib/systemlib.h>
 #include <systemlib/err.h>
 
-#include "TargetShiftEstimator.hpp"
+#include "TargetLandPosEstimator.hpp"
 
-extern "C" __EXPORT int target_shift_estimator_main(int argc, char *argv[]);
+extern "C" __EXPORT int target_land_pos_estimator_main(int argc, char *argv[]);
 
-namespace shift_estimator {
+namespace target_land_pos_estimator {
     //global instance
-    TargetShiftEstimator* instance;
+    TargetLandPosEstimator* instance;
 }
 
-int target_shift_estimator_main(int argc, char *argv[])
+int target_land_pos_estimator_main(int argc, char *argv[])
 {
     if (argc < 2) {
-        warnx("usage: target_shift_estimator {start|stop|status}");
+        warnx("usage: target_land_pos_estimator {start|stop|status}");
         return 1;
     }
 
     if (!strcmp(argv[1], "start")) {
 
-        if (shift_estimator::instance != nullptr) {
+        if (target_land_pos_estimator::instance != nullptr) {
             warnx("already running");
             return 1;
         }
 
-        shift_estimator::instance = new shift_estimator::TargetShiftEstimator;
+        target_land_pos_estimator::instance = new target_land_pos_estimator::TargetLandPosEstimator;
 
-        if (shift_estimator::instance == nullptr) {
+        if (target_land_pos_estimator::instance == nullptr) {
             warnx("alloc failed");
             return 1;
         }
 
-        if (OK != shift_estimator::instance->start()) {
-            delete shift_estimator::instance;
-            shift_estimator::instance = nullptr;
+        if (OK != target_land_pos_estimator::instance->start()) {
+            delete target_land_pos_estimator::instance;
+            target_land_pos_estimator::instance = nullptr;
             warnx("start failed");
             return 1;
         }
@@ -105,18 +105,18 @@ int target_shift_estimator_main(int argc, char *argv[])
     }
 
     if (!strcmp(argv[1], "stop")) {
-        if (shift_estimator::instance == nullptr) {
+        if (target_land_pos_estimator::instance == nullptr) {
             warnx("not running");
             return 1;
         }
 
-        delete shift_estimator::instance;
-        shift_estimator::instance = nullptr;
+        delete target_land_pos_estimator::instance;
+        target_land_pos_estimator::instance = nullptr;
         return 0;
     }
 
     if (!strcmp(argv[1], "status")) {
-        if (shift_estimator::instance) {
+        if (target_land_pos_estimator::instance) {
             warnx("running");
             return 0;
 
@@ -127,22 +127,22 @@ int target_shift_estimator_main(int argc, char *argv[])
     }
 
 //    if (!strcmp(argv[1], "test")) {
-//        if (shift_estimator::instance) {
+//        if (target_land_pos_estimator::instance) {
 //            warnx("already running, please stop first for test");
 //            return 0;
 
 //        } else {
-//            shift_estimator::instance = new shift_estimator::TargetShiftEstimator;
+//            target_land_pos_estimator::instance = new target_land_pos_estimator::TargetLandPosEstimator;
 
-//            if (shift_estimator::instance == nullptr) {
+//            if (target_land_pos_estimator::instance == nullptr) {
 //                warnx("alloc failed");
 //                return 1;
 //            }
 
 //            makeTest();
-//            if (OK != shift_estimator::instance->start()) {
-//                delete shift_estimator::instance;
-//                shift_estimator::instance = nullptr;
+//            if (OK != target_land_pos_estimator::instance->start()) {
+//                delete target_land_pos_estimator::instance;
+//                target_land_pos_estimator::instance = nullptr;
 //                warnx("start failed");
 //                return 1;
 //            }

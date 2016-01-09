@@ -110,7 +110,7 @@ set(config_module_list
 	modules/controllib
 	modules/uORB
 	modules/dataman
-	modules/target_shift_estimator
+	modules/target_land_pos_estimator
 
 	#
 	# Libraries
