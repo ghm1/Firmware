@@ -6,7 +6,7 @@
 
 #include <uORB/topics/control_state.h>
 #include <uORB/topics/vehicle_local_position.h>
-#include <uORB/topics/camera_pixy5pts.h>
+#include <uORB/topics/camera_norm_coords.h>
 #include <uORB/topics/target_land_position.h>
 #include <uORB/topics/home_position.h>
 
@@ -74,7 +74,7 @@ namespace shift_estimator
         orb_advert_t _target_land_position_pub;
 
         struct vehicle_local_position_s			_local_pos;		/**< vehicle local position */
-        struct camera_pixy5pts_s                _pixy5pts;
+        struct camera_norm_coords_s                _pixy5pts;
         struct control_state_s                  _ctrl_state;
         struct target_land_position_s           _target_land_position;
 

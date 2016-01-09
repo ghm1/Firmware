@@ -61,7 +61,7 @@
 #include <systemlib/err.h>
 
 #include <uORB/uORB.h>
-#include <uORB/topics/camera_pixy5pts.h>
+#include <uORB/topics/camera_norm_coords.h>
 
 /** Configuration Constants **/
 #define PIXY5PTS_I2C_BUS			PX4_I2C_BUS_EXPANSION
@@ -123,7 +123,7 @@ private:
 	work_s _work;
 	uint32_t _read_failures;
 
-    orb_advert_t _camera_pixy5pts_topic;
+    orb_advert_t _camera_norm_coords_topic;
 };
 
 /** global pointer for single PIXY5PTS sensor **/
@@ -142,7 +142,7 @@ PIXY5PTS::PIXY5PTS(int bus, int address) :
 	_reports(nullptr),
 	_sensor_ok(false),
     _read_failures(0),
-    _camera_pixy5pts_topic(nullptr)
+    _camera_norm_coords_topic(nullptr)
 {
 	memset(&_work, 0, sizeof(_work));
 }
@@ -273,7 +273,7 @@ int PIXY5PTS::test_pts()
     /** instructions to user **/
     warnx("sending test points");
 
-    struct camera_pixy5pts_s report;
+    struct camera_norm_coords_s report;
     report.timestamp = hrt_absolute_time();
     report.count = 4;
     report.x_coord[0] = 107.2309;
@@ -303,12 +303,12 @@ int PIXY5PTS::test_pts()
     }
 
     //send new report over uorb
-    if (_camera_pixy5pts_topic == nullptr) {
-        _camera_pixy5pts_topic = orb_advertise(ORB_ID(camera_pixy5pts), &report);
+    if (_camera_norm_coords_topic == nullptr) {
+        _camera_norm_coords_topic = orb_advertise(ORB_ID(camera_norm_coords), &report);
 
     } else {
         /* publish it */
-        orb_publish(ORB_ID(camera_pixy5pts), _camera_pixy5pts_topic, &report);
+        orb_publish(ORB_ID(camera_norm_coords), _camera_norm_coords_topic, &report);
     }
 
 
@@ -426,8 +426,8 @@ int PIXY5PTS::read_device()
     //iterate over new buffer objects if there are any
     if(num_objects > 0)
     {
-        struct camera_pixy5pts_s report;
-        //struct camera_pixy5pts_s report;
+        struct camera_norm_coords_s report;
+        //struct camera_norm_coords_s report;
         report.timestamp = hrt_absolute_time();
         report.count = num_objects;
 
@@ -467,12 +467,12 @@ int PIXY5PTS::read_device()
         }
 
         //send new report over uorb
-        if (_camera_pixy5pts_topic == nullptr) {
-            _camera_pixy5pts_topic = orb_advertise(ORB_ID(camera_pixy5pts), &report);
+        if (_camera_norm_coords_topic == nullptr) {
+            _camera_norm_coords_topic = orb_advertise(ORB_ID(camera_norm_coords), &report);
 
         } else {
             /* publish it */
-            orb_publish(ORB_ID(camera_pixy5pts), _camera_pixy5pts_topic, &report);
+            orb_publish(ORB_ID(camera_norm_coords), _camera_norm_coords_topic, &report);
         }
 
 //        //debug output

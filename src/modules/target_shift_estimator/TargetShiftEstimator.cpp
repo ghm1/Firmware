@@ -237,7 +237,7 @@ TargetShiftEstimator::make_subscriptions()
 {
     //attitude from attitude controller
     _ctrl_state_sub = orb_subscribe(ORB_ID(control_state));
-    _pixy5pts_sub = orb_subscribe(ORB_ID(camera_pixy5pts));
+    _pixy5pts_sub = orb_subscribe(ORB_ID(camera_norm_coords));
     _local_pos_sub = orb_subscribe(ORB_ID(vehicle_local_position));
 }
 
@@ -263,8 +263,8 @@ TargetShiftEstimator::poll_subscriptions()
     orb_check(_pixy5pts_sub, &updated);
 
     if (updated) {
-        //warnx("camera_pixy5pts updated");
-        orb_copy(ORB_ID(camera_pixy5pts), _pixy5pts_sub, &_pixy5pts);
+        //warnx("camera_norm_coords updated");
+        orb_copy(ORB_ID(camera_norm_coords), _pixy5pts_sub, &_pixy5pts);
     }
 }
 
@@ -439,7 +439,7 @@ TargetShiftEstimator::targetCompare(const Target& lhs, const Target& rhs)
 bool
 TargetShiftEstimator::test1()
 {
-    struct camera_pixy5pts_s testPts;
+    struct camera_norm_coords_s testPts;
     testPts.count = 4;
     testPts.timestamp = hrt_absolute_time();
     //add points
