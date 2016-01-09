@@ -32,7 +32,7 @@
  ****************************************************************************/
 
 /**
- * @file pixy5Pts.cpp
+ * @file pixy_cam.cpp
  * @author Michael Göttlicher
  *
  * Driver for an IR-Lock and Pixy vision sensor connected via I2C. Up to five
@@ -53,7 +53,7 @@
 #include <drivers/boards/px4fmu-v2/board_config.h>
 #include <drivers/device/i2c.h>
 #include <drivers/device/ringbuffer.h>
-#include <drivers/drv_pixy5pts.h>
+#include <drivers/drv_pixy_cam.h>
 #include <drivers/drv_hrt.h>
 
 #include <nuttx/clock.h>
@@ -64,30 +64,30 @@
 #include <uORB/topics/camera_norm_coords.h>
 
 /** Configuration Constants **/
-#define PIXY5PTS_I2C_BUS			PX4_I2C_BUS_EXPANSION
-#define PIXY5PTS_I2C_ADDRESS		0x54 /** 7-bit address (non shifted) **/
-#define PIXY5PTS_CONVERSION_INTERVAL_US	20000U /** us = 20ms = 50Hz **/
+#define PIXY_CAM_I2C_BUS			PX4_I2C_BUS_EXPANSION
+#define PIXY_CAM_I2C_ADDRESS		0x54 /** 7-bit address (non shifted) **/
+#define PIXY_CAM_CONVERSION_INTERVAL_US	20000U /** us = 20ms = 50Hz **/
 
-#define PIXY5PTS_SYNC			0xAA55
-#define PIXY5PTS_RESYNC		0x5500
-#define PIXY5PTS_ADJUST		0xAA
+#define PIXY_CAM_SYNC			0xAA55
+#define PIXY_CAM_RESYNC		0x5500
+#define PIXY_CAM_ADJUST		0xAA
 
-#define PIXY5PTS_CENTER_X				160.44f			// the x-axis center pixel position
-#define PIXY5PTS_CENTER_Y				100.75f		// the y-axis center pixel position
-#define PIXY5PTS_FOCAL_X                323.70584f       // focal length in x-direction
-#define PIXY5PTS_FOCAL_Y                324.26201f       // focal length in y-direction
-#define PIXY5PTS_P1                     0.5084f          // coefficient for undistortion for 3rd degree
-#define PIXY5PTS_P3                     0.9970f          // coefficient for undistortion for 1st degree
+#define PIXY_CAM_CENTER_X				160.44f			// the x-axis center pixel position
+#define PIXY_CAM_CENTER_Y				100.75f		// the y-axis center pixel position
+#define PIXY_CAM_FOCAL_X                323.70584f       // focal length in x-direction
+#define PIXY_CAM_FOCAL_Y                324.26201f       // focal length in y-direction
+#define PIXY_CAM_P1                     0.5084f          // coefficient for undistortion for 3rd degree
+#define PIXY_CAM_P3                     0.9970f          // coefficient for undistortion for 1st degree
 
 #ifndef CONFIG_SCHED_WORKQUEUE
 # error This requires CONFIG_SCHED_WORKQUEUE.
 #endif
 
-class PIXY5PTS : public device::I2C
+class PIXY_CAM : public device::I2C
 {
 public:
-    PIXY5PTS(int bus = PIXY5PTS_I2C_BUS, int address = PIXY5PTS_I2C_ADDRESS);
-    virtual ~PIXY5PTS();
+    PIXY_CAM(int bus = PIXY_CAM_I2C_BUS, int address = PIXY_CAM_I2C_ADDRESS);
+    virtual ~PIXY_CAM();
 
 	virtual int init();
 	virtual int probe();
@@ -115,7 +115,7 @@ private:
 	int 		read_device();
 	bool 		sync_device();
 	int 		read_device_word(uint16_t *word);
-    int 		read_device_block(struct pixy5pts_s *block);
+    int 		read_device_block(struct pixy_cam_s *block);
 
 	/** internal variables **/
 	ringbuffer::RingBuffer *_reports;
@@ -126,19 +126,19 @@ private:
     orb_advert_t _camera_norm_coords_topic;
 };
 
-/** global pointer for single PIXY5PTS sensor **/
+/** global pointer for single PIXY_CAM sensor **/
 namespace
 {
-PIXY5PTS *g_pixy5pts = nullptr;
+PIXY_CAM *g_pixy_cam = nullptr;
 }
 
-void pixy5pts_usage();
+void pixy_cam_usage();
 
-extern "C" __EXPORT int pixy5pts_main(int argc, char *argv[]);
+extern "C" __EXPORT int pixy_cam_main(int argc, char *argv[]);
 
 /** constructor **/
-PIXY5PTS::PIXY5PTS(int bus, int address) :
-    I2C("pixy5pts", PIXY5PTS0_DEVICE_PATH, bus, address, 400000),
+PIXY_CAM::PIXY_CAM(int bus, int address) :
+    I2C("pixy_cam", PIXY_CAM0_DEVICE_PATH, bus, address, 400000),
 	_reports(nullptr),
 	_sensor_ok(false),
     _read_failures(0),
@@ -148,7 +148,7 @@ PIXY5PTS::PIXY5PTS(int bus, int address) :
 }
 
 /** destructor **/
-PIXY5PTS::~PIXY5PTS()
+PIXY_CAM::~PIXY_CAM()
 {
 	stop();
 
@@ -159,7 +159,7 @@ PIXY5PTS::~PIXY5PTS()
 }
 
 /** initialise driver to communicate with sensor **/
-int PIXY5PTS::init()
+int PIXY_CAM::init()
 {
 	/** initialise I2C bus **/
 	int ret = I2C::init();
@@ -169,7 +169,7 @@ int PIXY5PTS::init()
 	}
 
 	/** allocate buffer storing values read from sensor **/
-    _reports = new ringbuffer::RingBuffer(PIXY5PTS_OBJECTS_MAX, sizeof(struct pixy5pts_s));
+    _reports = new ringbuffer::RingBuffer(PIXY_CAM_OBJECTS_MAX, sizeof(struct pixy_cam_s));
 
 	if (_reports == nullptr) {
 		return ENOTTY;
@@ -183,10 +183,10 @@ int PIXY5PTS::init()
 }
 
 /** probe the device is on the I2C bus **/
-int PIXY5PTS::probe()
+int PIXY_CAM::probe()
 {
 	/*
-     * PIXY5PTS defaults to sending 0x00 when there is no block
+     * PIXY_CAM defaults to sending 0x00 when there is no block
 	 * data to return, so really all we can do is check to make
 	 * sure a transfer completes successfully.
 	 **/
@@ -200,10 +200,10 @@ int PIXY5PTS::probe()
 }
 
 /** display driver info **/
-int PIXY5PTS::info()
+int PIXY_CAM::info()
 {
-    if (g_pixy5pts == nullptr) {
-        errx(1, "pixy5pts device driver is not running");
+    if (g_pixy_cam == nullptr) {
+        errx(1, "pixy_cam device driver is not running");
 	}
 
 	/** display reports in queue **/
@@ -219,11 +219,11 @@ int PIXY5PTS::info()
 }
 
 /** test driver **/
-int PIXY5PTS::test()
+int PIXY_CAM::test()
 {
 	/** exit immediately if driver not running **/
-    if (g_pixy5pts == nullptr) {
-        errx(1, "pixy5pts device driver is not running");
+    if (g_pixy_cam == nullptr) {
+        errx(1, "pixy_cam device driver is not running");
 	}
 
 	/** exit immediately if sensor is not healty **/
@@ -235,7 +235,7 @@ int PIXY5PTS::test()
 	warnx("searching for object for 10 seconds");
 
 	/** read from sensor for 10 seconds **/
-    struct pixy5pts_s obj_report;
+    struct pixy_cam_s obj_report;
 	uint64_t start_time = hrt_absolute_time();
 
 	while ((hrt_absolute_time() - start_time) < 10000000) {
@@ -258,11 +258,11 @@ int PIXY5PTS::test()
 	return OK;
 }
 
-int PIXY5PTS::test_pts()
+int PIXY_CAM::test_pts()
 {
     /** exit immediately if driver not running **/
-    if (g_pixy5pts == nullptr) {
-        errx(1, "pixy5pts device driver is not running");
+    if (g_pixy_cam == nullptr) {
+        errx(1, "pixy_cam device driver is not running");
     }
 
     /** exit immediately if sensor is not healty **/
@@ -289,13 +289,13 @@ int PIXY5PTS::test_pts()
     for( unsigned i=0; i < 4; ++i )
     {
         //convert to ned
-        float x_norm = (report.x_coord[i] - PIXY5PTS_CENTER_X) / PIXY5PTS_FOCAL_X;
-        float y_norm = (report.y_coord[i] - PIXY5PTS_CENTER_Y) / PIXY5PTS_FOCAL_Y;
+        float x_norm = (report.x_coord[i] - PIXY_CAM_CENTER_X) / PIXY_CAM_FOCAL_X;
+        float y_norm = (report.y_coord[i] - PIXY_CAM_CENTER_Y) / PIXY_CAM_FOCAL_Y;
         //conversion to polar coordinates
         float phi = atan2f(y_norm, x_norm);
         float r_dist_sq = x_norm * x_norm + y_norm * y_norm;
         float r_dist = sqrtf(r_dist_sq);
-        float r_undist = PIXY5PTS_P1 * r_dist_sq * r_dist + PIXY5PTS_P3 * r_dist;
+        float r_undist = PIXY_CAM_P1 * r_dist_sq * r_dist + PIXY_CAM_P3 * r_dist;
 
         //set to report
         report.x_coord[i] = r_undist * cosf(phi);
@@ -316,45 +316,45 @@ int PIXY5PTS::test_pts()
 }
 
 /** start periodic reads from sensor **/
-void PIXY5PTS::start()
+void PIXY_CAM::start()
 {
 	/** flush ring and reset state machine **/
 	_reports->flush();
 
 	/** start work queue cycle **/
-    work_queue(HPWORK, &_work, (worker_t)&PIXY5PTS::cycle_trampoline, this, 1);
+    work_queue(HPWORK, &_work, (worker_t)&PIXY_CAM::cycle_trampoline, this, 1);
 }
 
 /** stop periodic reads from sensor **/
-void PIXY5PTS::stop()
+void PIXY_CAM::stop()
 {
 	work_cancel(HPWORK, &_work);
 }
 
-void PIXY5PTS::cycle_trampoline(void *arg)
+void PIXY_CAM::cycle_trampoline(void *arg)
 {
-    PIXY5PTS *device = (PIXY5PTS *)arg;
+    PIXY_CAM *device = (PIXY_CAM *)arg;
 
-    /** check global pixy5pts reference and cycle **/
-    if (g_pixy5pts != nullptr) {
+    /** check global pixy_cam reference and cycle **/
+    if (g_pixy_cam != nullptr) {
 		device->cycle();
 	}
 }
 
-void PIXY5PTS::cycle()
+void PIXY_CAM::cycle()
 {
 	/** ignoring failure, if we do, we will be back again right away... **/
 	read_device();
 
 	/** schedule the next cycle **/
-    work_queue(HPWORK, &_work, (worker_t)&PIXY5PTS::cycle_trampoline, this, USEC2TICK(PIXY5PTS_CONVERSION_INTERVAL_US));
+    work_queue(HPWORK, &_work, (worker_t)&PIXY_CAM::cycle_trampoline, this, USEC2TICK(PIXY_CAM_CONVERSION_INTERVAL_US));
 }
 
 //this method is only called from ardupilot application design
-ssize_t PIXY5PTS::read(struct file *filp, char *buffer, size_t buflen)
+ssize_t PIXY_CAM::read(struct file *filp, char *buffer, size_t buflen)
 {
-    unsigned count = buflen / sizeof(struct pixy5pts_s);
-    struct pixy5pts_s *rbuf = reinterpret_cast<struct pixy5pts_s *>(buffer);
+    unsigned count = buflen / sizeof(struct pixy_cam_s);
+    struct pixy_cam_s *rbuf = reinterpret_cast<struct pixy_cam_s *>(buffer);
 	int ret = 0;
 
 	if (count < 1) {
@@ -375,7 +375,7 @@ ssize_t PIXY5PTS::read(struct file *filp, char *buffer, size_t buflen)
 }
 
 /** sync device to ensure reading starts at new frame*/
-bool PIXY5PTS::sync_device()
+bool PIXY_CAM::sync_device()
 {
 	uint8_t sync_byte;
 	uint16_t sync_word;
@@ -384,14 +384,14 @@ bool PIXY5PTS::sync_device()
 		return false;
 	}
 
-    if (sync_word == PIXY5PTS_RESYNC) {
+    if (sync_word == PIXY_CAM_RESYNC) {
 		transfer(nullptr, 0, &sync_byte, 1);
 
-        if (sync_byte == PIXY5PTS_ADJUST) {
+        if (sync_byte == PIXY_CAM_ADJUST) {
 			return true;
 		}
 
-    } else if (sync_word == PIXY5PTS_SYNC) {
+    } else if (sync_word == PIXY_CAM_SYNC) {
 		return true;
 	}
 
@@ -399,7 +399,7 @@ bool PIXY5PTS::sync_device()
 }
 
 /** read all available frames from sensor **/
-int PIXY5PTS::read_device()
+int PIXY_CAM::read_device()
 {
 	/** if we sync, then we are starting a new frame, else fail **/
 	if (!sync_device()) {
@@ -412,8 +412,8 @@ int PIXY5PTS::read_device()
 
     //get all new objects from pixy
     //todo: what about sending 5 points from pixy in one frame
-    struct pixy5pts_s block;
-    while (sync_device() && (num_objects < PIXY5PTS_OBJECTS_MAX)) {
+    struct pixy_cam_s block;
+    while (sync_device() && (num_objects < PIXY_CAM_OBJECTS_MAX)) {
 
 		if (read_device_block(&block) != OK) {
 			break;
@@ -444,13 +444,13 @@ int PIXY5PTS::read_device()
 //                  (double)block.angle_y);
 
             //convert to ned
-            float x_norm = (block.angle_x - PIXY5PTS_CENTER_X) / PIXY5PTS_FOCAL_X;
-            float y_norm = (block.angle_y - PIXY5PTS_CENTER_Y) / PIXY5PTS_FOCAL_Y;
+            float x_norm = (block.angle_x - PIXY_CAM_CENTER_X) / PIXY_CAM_FOCAL_X;
+            float y_norm = (block.angle_y - PIXY_CAM_CENTER_Y) / PIXY_CAM_FOCAL_Y;
             //conversion to polar coordinates
             float phi = atan2f(y_norm, x_norm);
             float r_dist_sq = x_norm * x_norm + y_norm * y_norm;
             float r_dist = sqrtf(r_dist_sq);
-            float r_undist = PIXY5PTS_P1 * r_dist_sq * r_dist + PIXY5PTS_P3 * r_dist;
+            float r_undist = PIXY_CAM_P1 * r_dist_sq * r_dist + PIXY_CAM_P3 * r_dist;
 
             //set to report
             float x = r_undist * cosf(phi);
@@ -489,7 +489,7 @@ int PIXY5PTS::read_device()
 }
 
 /** read a word (two bytes) from sensor **/
-int PIXY5PTS::read_device_word(uint16_t *word)
+int PIXY_CAM::read_device_word(uint16_t *word)
 {
 	uint8_t bytes[2];
 	memset(bytes, 0, sizeof bytes);
@@ -501,7 +501,7 @@ int PIXY5PTS::read_device_word(uint16_t *word)
 }
 
 /** read a single block (a full frame) from sensor **/
-int PIXY5PTS::read_device_block(struct pixy5pts_s *block)
+int PIXY_CAM::read_device_block(struct pixy_cam_s *block)
 {
 	uint8_t bytes[12];
 	memset(bytes, 0, sizeof bytes);
@@ -522,10 +522,10 @@ int PIXY5PTS::read_device_block(struct pixy5pts_s *block)
 
 //	/** convert to angles **/
 //	block->target_num = target_num;
-//    block->angle_x = (((float)(pixel_x - PIXY5PTS_CENTER_X)) / PIXY5PTS_PIXELS_PER_RADIAN_X);
-//    block->angle_y = (((float)(pixel_y - PIXY5PTS_CENTER_Y)) / PIXY5PTS_PIXELS_PER_RADIAN_Y);
-//    block->size_x = pixel_size_x / PIXY5PTS_PIXELS_PER_RADIAN_X;
-//    block->size_y = pixel_size_y / PIXY5PTS_PIXELS_PER_RADIAN_Y;
+//    block->angle_x = (((float)(pixel_x - PIXY_CAM_CENTER_X)) / PIXY_CAM_PIXELS_PER_RADIAN_X);
+//    block->angle_y = (((float)(pixel_y - PIXY_CAM_CENTER_Y)) / PIXY_CAM_PIXELS_PER_RADIAN_Y);
+//    block->size_x = pixel_size_x / PIXY_CAM_PIXELS_PER_RADIAN_X;
+//    block->size_y = pixel_size_y / PIXY_CAM_PIXELS_PER_RADIAN_Y;
 
 //	block->timestamp = hrt_absolute_time();
 
@@ -539,16 +539,16 @@ int PIXY5PTS::read_device_block(struct pixy5pts_s *block)
 	return status;
 }
 
-void pixy5pts_usage()
+void pixy_cam_usage()
 {
     warnx("missing command: try 'start', 'stop', 'info', 'test', 'testpts' ");
 	warnx("options:");
-    warnx("    -b i2cbus (%d)", PIXY5PTS_I2C_BUS);
+    warnx("    -b i2cbus (%d)", PIXY_CAM_I2C_BUS);
 }
 
-int pixy5pts_main(int argc, char *argv[])
+int pixy_cam_main(int argc, char *argv[])
 {
-    int i2cdevice = PIXY5PTS_I2C_BUS;
+    int i2cdevice = PIXY_CAM_I2C_BUS;
 
     /* jump over start/off/etc and look at options first **/
 	if (getopt(argc, argv, "b:") != EOF) {
@@ -556,7 +556,7 @@ int pixy5pts_main(int argc, char *argv[])
 	}
 
 	if (optind >= argc) {
-        pixy5pts_usage();
+        pixy_cam_usage();
 		exit(1);
 	}
 
@@ -565,22 +565,22 @@ int pixy5pts_main(int argc, char *argv[])
 	/** start driver **/
 	if (!strcmp(command, "start")) {
         /* test nullpointer if already initialized */
-        if (g_pixy5pts != nullptr) {
+        if (g_pixy_cam != nullptr) {
 			errx(1, "driver has already been started");
 		}
 
 		/** instantiate global instance **/
-        g_pixy5pts = new PIXY5PTS(i2cdevice, PIXY5PTS_I2C_ADDRESS);
+        g_pixy_cam = new PIXY_CAM(i2cdevice, PIXY_CAM_I2C_ADDRESS);
 
-        if (g_pixy5pts == nullptr) {
+        if (g_pixy_cam == nullptr) {
 			errx(1, "failed to allocated memory for driver");
 		}
 
 		/** initialise global instance **/
-        if (g_pixy5pts->init() != OK) {
-            PIXY5PTS *tmp_pixy5pts = g_pixy5pts;
-            g_pixy5pts = nullptr;
-            delete tmp_pixy5pts;
+        if (g_pixy_cam->init() != OK) {
+            PIXY_CAM *tmp_pixy_cam = g_pixy_cam;
+            g_pixy_cam = nullptr;
+            delete tmp_pixy_cam;
 			errx(1, "failed to initialize device, stopping driver");
 		}
 
@@ -588,40 +588,40 @@ int pixy5pts_main(int argc, char *argv[])
 	}
 
 	/** need the driver past this point **/
-    if (g_pixy5pts == nullptr) {
+    if (g_pixy_cam == nullptr) {
 		warnx("not started");
-        pixy5pts_usage();
+        pixy_cam_usage();
 		exit(1);
 	}
 
 	/** stop the driver **/
 	if (!strcmp(command, "stop")) {
-        PIXY5PTS *tmp_pixy5pts = g_pixy5pts;
-        g_pixy5pts = nullptr;
-        delete tmp_pixy5pts;
-        warnx("pixy5pts stopped");
+        PIXY_CAM *tmp_pixy_cam = g_pixy_cam;
+        g_pixy_cam = nullptr;
+        delete tmp_pixy_cam;
+        warnx("pixy_cam stopped");
 		exit(OK);
 	}
 
 	/** Print driver information **/
 	if (!strcmp(command, "info")) {
-        g_pixy5pts->info();
+        g_pixy_cam->info();
 		exit(OK);
 	}
 
 	/** test driver **/
 	if (!strcmp(command, "test")) {
-        g_pixy5pts->test();
+        g_pixy_cam->test();
 		exit(OK);
 	}
 
     /** send test points **/
     if (!strcmp(command, "testpts")) {
-        g_pixy5pts->test_pts();
+        g_pixy_cam->test_pts();
         exit(OK);
     }
 
 	/** display usage info **/
-    pixy5pts_usage();
+    pixy_cam_usage();
 	exit(0);
 }

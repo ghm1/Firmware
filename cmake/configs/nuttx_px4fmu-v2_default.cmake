@@ -47,7 +47,7 @@ set(config_module_list
 	drivers/camera_trigger
 	#drivers/irlock
     drivers/bst
-	drivers/pixy5pts
+	drivers/pixy_cam
 
 	#
 	# System commands

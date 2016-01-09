@@ -32,9 +32,9 @@
  ****************************************************************************/
 
 /**
- * @file drv_pixy5pts.h
+ * @file drv_pixy_cam.h
  *
- * Pixy 5Pts device API
+ * Pixy Camera device API
  **/
 
 #pragma once
@@ -44,13 +44,13 @@
 
 #include "drv_sensor.h" // include sensor driver interfaces
 
-#define PIXY5PTS_BASE_DEVICE_PATH	"/dev/pixy5pts"
-#define PIXY5PTS0_DEVICE_PATH	"/dev/pixy5pts0"
+#define PIXY_CAM_BASE_DEVICE_PATH	"/dev/pixy_cam"
+#define PIXY_CAM0_DEVICE_PATH	"/dev/pixy_cam0"
 
-#define PIXY5PTS_OBJECTS_MAX	5	/** up to 5 objects can be detected/reported **/
+#define PIXY_CAM_OBJECTS_MAX	5	/** up to 5 objects can be detected/reported **/
 
-/** pixy5pts_s structure returned from read calls **/
-struct pixy5pts_s {
+/** pixy_cam_s structure returned from read calls **/
+struct pixy_cam_s {
 	uint64_t timestamp; /** microseconds since system start **/
 	uint16_t target_num;	/** target number prioritised by size (largest is 0) **/
 	float angle_x;	/** x-axis angle in radians from center of image to center of target **/

@@ -31,12 +31,12 @@
 #
 ############################################################################
 px4_add_module(
-	MODULE drivers__pixy5pts
-	MAIN pixy5pts
+	MODULE drivers__pixy_cam
+	MAIN pixy_cam
 	COMPILE_FLAGS
 		-Os
 	SRCS
-		pixy5pts.cpp
+		pixy_cam.cpp
 	DEPENDS
 		platforms__common
 	)
