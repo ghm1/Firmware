@@ -564,7 +564,7 @@ TargetLandPosEstimator::test3()
     //offset to home -> target_land_position
     float x_offs = 1.0f;
     float y_offs = 2.0f;
-    float z_offs = 0.0f;
+    float z_offs = -1.0f;
     float yaw_offs = .0f;
 
     /* wakeup source */
