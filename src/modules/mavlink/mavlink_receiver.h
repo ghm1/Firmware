@@ -75,7 +75,6 @@
 #include <uORB/topics/time_offset.h>
 #include <uORB/topics/distance_sensor.h>
 #include <uORB/topics/pixy_cam_pts.h>
-#include "v1.0/common/mavlink_msg_pixy_cam_pts.h"
 
 #include "mavlink_ftp.h"
 
