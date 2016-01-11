@@ -227,6 +227,9 @@ MavlinkReceiver::handle_message(mavlink_message_t *msg)
 		handle_message_distance_sensor(msg);
 		break;
 
+    case MAVLINK_MSG_ID_PIXY_CAM_PTS:
+        handle_message_pixy_cam_pts(msg);
+
 	default:
 		break;
 	}
@@ -1742,6 +1745,7 @@ MavlinkReceiver::handle_message_hil_state_quaternion(mavlink_message_t *msg)
 void
 MavlinkReceiver::handle_message_pixy_cam_pts(mavlink_message_t *msg)
 {
+    warnx("[mavlink] MavlinkReceiver::handle_message_pixy_cam_pts\n");
     mavlink_pixy_cam_pts_t pts;
     mavlink_msg_pixy_cam_pts_decode(msg, &pts);
 
