@@ -68,13 +68,13 @@ namespace target_land_pos_estimator
         int         _control_task;			/**< task handle for task */
 
         int		_local_pos_sub;			/**< vehicle local position */
-        int     _pixy5pts_sub;
+        int     _camera_norm_coords_sub;
         int     _ctrl_state_sub;
 
         orb_advert_t _target_land_position_pub;
 
         struct vehicle_local_position_s			_local_pos;		/**< vehicle local position */
-        struct camera_norm_coords_s                _pixy5pts;
+        struct camera_norm_coords_s                _camera_norm_coords;
         struct control_state_s                  _ctrl_state;
         struct target_land_position_s           _target_land_position;
 

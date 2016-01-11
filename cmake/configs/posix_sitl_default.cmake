@@ -6,6 +6,7 @@ set(config_module_list
 	drivers/device
 	drivers/boards/sitl
 	drivers/pwm_out_sim
+	drivers/pixy_cam_sim
 	platforms/common
 	platforms/posix/px4_layer
 	platforms/posix/work_queue

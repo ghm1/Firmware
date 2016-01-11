@@ -42,19 +42,19 @@ using namespace target_land_pos_estimator;
 static const int ERROR = -1;
 
 //global instance
-TargetLandPosEstimator* instance;
+//TargetLandPosEstimator* instance;
 
 TargetLandPosEstimator::TargetLandPosEstimator()
     : _task_should_exit(false),
       _control_task(-1),
       /* subscriptions */
       _local_pos_sub(-1),
-      _pixy5pts_sub(-1),
+      _camera_norm_coords_sub(-1),
       _ctrl_state_sub(-1),
       _target_land_position_pub(nullptr),
       _test1(false),
       _test2(false),
-      _test3(true)
+      _test3(false)
 {
     memset(&_ctrl_state, 0, sizeof(_ctrl_state));
     memset(&_local_pos, 0, sizeof(_local_pos));
@@ -128,12 +128,12 @@ TargetLandPosEstimator::task_main()
         test2();
     }
     else if(_test3) {
-        warnx("[shift_estimator] test3\n");
+        warnx("[target_land_pos_estimator] test3\n");
         //we use the home position plus an offset plus noise to check reaction of copter to scattering position estimations
         test3();
     }
     else {
-        warnx("[shift_estimator] starting\n");
+        warnx("[target_land_pos_estimator] starting\n");
 
         //subscribe to topics an make a first poll
         make_subscriptions();
@@ -142,7 +142,7 @@ TargetLandPosEstimator::task_main()
         /* wakeup source */
         px4_pollfd_struct_t fds[1];
 
-        fds[0].fd = _pixy5pts_sub;
+        fds[0].fd = _camera_norm_coords_sub;
         fds[0].events = POLLIN;
 
         while (!_task_should_exit)
@@ -152,7 +152,7 @@ TargetLandPosEstimator::task_main()
 
             /* timed out - periodic check for _task_should_exit */
             if (pret == 0) {
-                //warnx("[shift_estimator] poll timeout");
+                warnx("[target_land_pos_estimator] poll timeout");
                 continue;
             }
 
@@ -169,13 +169,13 @@ TargetLandPosEstimator::task_main()
             if( _local_pos.xy_valid == true && _local_pos.z_valid )
                 continue;
 
-//            int count = _pixy5pts.count;
+//            int count = _camera_norm_coords.count;
 //            if(count == 4)
 //            {
 //                //warnx("unrotated pts: %d", count);
 //                for(unsigned i=0; i < count; i++ )
 //                {
-//                    warnx("Pt %d: x= %.2f, y= %.2f", i, (double)_pixy5pts.x_coord[i], (double)_pixy5pts.y_coord[i] );
+//                    warnx("Pt %d: x= %.2f, y= %.2f", i, (double)_camera_norm_coords.x_coord[i], (double)_camera_norm_coords.y_coord[i] );
 //                }
 //            }
 
@@ -237,7 +237,7 @@ TargetLandPosEstimator::make_subscriptions()
 {
     //attitude from attitude controller
     _ctrl_state_sub = orb_subscribe(ORB_ID(control_state));
-    _pixy5pts_sub = orb_subscribe(ORB_ID(camera_norm_coords));
+    _camera_norm_coords_sub = orb_subscribe(ORB_ID(camera_norm_coords));
     _local_pos_sub = orb_subscribe(ORB_ID(vehicle_local_position));
 }
 
@@ -260,18 +260,18 @@ TargetLandPosEstimator::poll_subscriptions()
         orb_copy(ORB_ID(vehicle_local_position), _local_pos_sub, &_local_pos);
     }
 
-    orb_check(_pixy5pts_sub, &updated);
+    orb_check(_camera_norm_coords_sub, &updated);
 
     if (updated) {
-        //warnx("camera_norm_coords updated");
-        orb_copy(ORB_ID(camera_norm_coords), _pixy5pts_sub, &_pixy5pts);
+        warnx("camera_norm_coords updated");
+        orb_copy(ORB_ID(camera_norm_coords), _camera_norm_coords_sub, &_camera_norm_coords);
     }
 }
 
 void
 TargetLandPosEstimator::calculateTargetToCameraShift()
 {
-    if(_pixy5pts.count == 4)
+    if(_camera_norm_coords.count == 4)
     {
         //rotate points into NED frame (orthogonal camera rotated about z-axis)  (timestamps should be similar)
         math::Quaternion q_att(_ctrl_state.q[0], _ctrl_state.q[1], _ctrl_state.q[2], _ctrl_state.q[3]);
@@ -286,10 +286,10 @@ TargetLandPosEstimator::calculateTargetToCameraShift()
 //        warnx("rotated points");
         _rotPts.clear();
         math::Vector<3> pt;
-        for(unsigned i=0; i<_pixy5pts.count; ++i)
+        for(unsigned i=0; i<_camera_norm_coords.count; ++i)
         {
-            pt(0) = _pixy5pts.x_coord[i];
-            pt(1) = _pixy5pts.y_coord[i];
+            pt(0) = _camera_norm_coords.x_coord[i];
+            pt(1) = _camera_norm_coords.y_coord[i];
             pt(2) = 1.0;
             pt = R * pt;
             //to normalized image coordinates
@@ -468,7 +468,7 @@ TargetLandPosEstimator::test1()
     test_ctrl_state.q[2] = q(2);
     test_ctrl_state.q[3] = q(3);
 
-    _pixy5pts = testPts;
+    _camera_norm_coords = testPts;
     _ctrl_state = test_ctrl_state;
 
     while(!_task_should_exit)
