@@ -1298,7 +1298,7 @@ MavlinkReceiver::handle_message_timesync(mavlink_message_t *msg)
 void
 MavlinkReceiver::handle_message_hil_sensor(mavlink_message_t *msg)
 {
-    warnx("[mavlink] MavlinkReceiver::handle_message_hil_sensor\n");
+    //warnx("[mavlink] MavlinkReceiver::handle_message_hil_sensor\n");
 	mavlink_hil_sensor_t imu;
 	mavlink_msg_hil_sensor_decode(msg, &imu);
 
@@ -1746,7 +1746,7 @@ MavlinkReceiver::handle_message_hil_state_quaternion(mavlink_message_t *msg)
 void
 MavlinkReceiver::handle_message_pixy_cam_pts(mavlink_message_t *msg)
 {
-    warnx("[mavlink] MavlinkReceiver::handle_message_pixy_cam_pts\n");
+    //warnx("[mavlink] MavlinkReceiver::handle_message_pixy_cam_pts\n");
     mavlink_pixy_cam_pts_t pts;
     mavlink_msg_pixy_cam_pts_decode(msg, &pts);
 

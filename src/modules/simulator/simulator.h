@@ -44,6 +44,7 @@
 #include <uORB/topics/actuator_outputs.h>
 #include <uORB/topics/vehicle_attitude.h>
 #include <uORB/topics/vehicle_status.h>
+#include <uORB/topics/pixy_cam_pts.h>
 #include <drivers/drv_accel.h>
 #include <drivers/drv_gyro.h>
 #include <drivers/drv_baro.h>
@@ -235,6 +236,8 @@ private:
 		_baro_pub(nullptr),
 		_gyro_pub(nullptr),
 		_mag_pub(nullptr),
+        _flow_pub(nullptr),
+        _pixy_cam_pts_pub(nullptr),
 		_initialized(false)
 #ifndef __PX4_QURT
 		,
@@ -279,12 +282,15 @@ private:
 	orb_advert_t _gyro_pub;
 	orb_advert_t _mag_pub;
 	orb_advert_t _flow_pub;
+    orb_advert_t _pixy_cam_pts_pub;
 
 	bool _initialized;
 
 	// class methods
 	int publish_sensor_topics(mavlink_hil_sensor_t *imu);
 	int publish_flow_topic(mavlink_hil_optical_flow_t *flow);
+    //ghm1: handling for pixy points
+    int publish_pixy_cam_pts_topic(mavlink_pixy_cam_pts_t *pts_mavlink);
 
 #ifndef __PX4_QURT
 	// uORB publisher handlers

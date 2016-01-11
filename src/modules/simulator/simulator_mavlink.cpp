@@ -291,6 +291,13 @@ void Simulator::handle_message(mavlink_message_t *msg, bool publish)
 		}
 
 		break;
+
+    case MAVLINK_MSG_ID_PIXY_CAM_PTS:
+        mavlink_pixy_cam_pts_t pts;
+        mavlink_msg_pixy_cam_pts_decode(msg, &pts);
+        publish_pixy_cam_pts_topic(&pts);
+
+        break;
 	}
 }
 
@@ -828,4 +835,33 @@ int Simulator::publish_flow_topic(mavlink_hil_optical_flow_t *flow_mavlink)
 	}
 
 	return OK;
+}
+
+int Simulator::publish_pixy_cam_pts_topic(mavlink_pixy_cam_pts_t *pts_mavlink)
+{
+    uint64_t timestamp = hrt_absolute_time();
+
+    struct pixy_cam_pts_s pixy_cam_pts;
+    memset(&pixy_cam_pts, 0, sizeof(pixy_cam_pts));
+
+    pixy_cam_pts.timestamp = timestamp;
+    pixy_cam_pts.count = pts_mavlink->count;
+
+    int count = pts_mavlink->count;
+    for( int i=0; i<count; ++i )
+    {
+        pixy_cam_pts.x[i] = pts_mavlink->x[i];
+        pixy_cam_pts.y[i] = pts_mavlink->y[i];
+        pixy_cam_pts.width[i] = pts_mavlink->width[i];
+        pixy_cam_pts.heigth[i] = pts_mavlink->height[i];
+    }
+
+    if (_pixy_cam_pts_pub == nullptr) {
+        _pixy_cam_pts_pub = orb_advertise(ORB_ID(pixy_cam_pts), &pixy_cam_pts);
+
+    } else {
+        orb_publish(ORB_ID(pixy_cam_pts), _pixy_cam_pts_pub, &pixy_cam_pts);
+    }
+
+    return OK;
 }
