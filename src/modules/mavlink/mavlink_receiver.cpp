@@ -227,9 +227,6 @@ MavlinkReceiver::handle_message(mavlink_message_t *msg)
 		handle_message_distance_sensor(msg);
 		break;
 
-    case MAVLINK_MSG_ID_PIXY_CAM_PTS:
-        handle_message_pixy_cam_pts(msg);
-
 	default:
 		break;
 	}
@@ -257,6 +254,9 @@ MavlinkReceiver::handle_message(mavlink_message_t *msg)
 		case MAVLINK_MSG_ID_HIL_OPTICAL_FLOW:
 			handle_message_hil_optical_flow(msg);
 			break;
+
+        case MAVLINK_MSG_ID_PIXY_CAM_PTS:
+            handle_message_pixy_cam_pts(msg);
 
 		default:
 			break;
@@ -1298,6 +1298,7 @@ MavlinkReceiver::handle_message_timesync(mavlink_message_t *msg)
 void
 MavlinkReceiver::handle_message_hil_sensor(mavlink_message_t *msg)
 {
+    warnx("[mavlink] MavlinkReceiver::handle_message_hil_sensor\n");
 	mavlink_hil_sensor_t imu;
 	mavlink_msg_hil_sensor_decode(msg, &imu);
 
