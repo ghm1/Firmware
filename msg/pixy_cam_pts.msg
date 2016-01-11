@@ -1,3 +1,4 @@
+# detected points from pixy camera
 uint8 PIXY_CAM_PTS_MAX_POINTS = 10
 
 uint64 timestamp		# in microseconds since system start

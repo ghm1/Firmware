@@ -125,6 +125,7 @@ MavlinkReceiver::MavlinkReceiver(Mavlink *parent) :
 	_manual_pub(nullptr),
 	_land_detector_pub(nullptr),
 	_time_offset_pub(nullptr),
+    _pixy_cam_pts_pub(nullptr),
 	_control_mode_sub(orb_subscribe(ORB_ID(vehicle_control_mode))),
 	_hil_frames(0),
 	_old_timestamp(0),
@@ -1738,7 +1739,36 @@ MavlinkReceiver::handle_message_hil_state_quaternion(mavlink_message_t *msg)
 }
 
 //ghm1mavtodo
+void
+MavlinkReceiver::handle_message_pixy_cam_pts(mavlink_message_t *msg)
+{
+    mavlink_pixy_cam_pts_t pts;
+    mavlink_msg_pixy_cam_pts_decode(msg, &pts);
 
+    uint64_t timestamp = hrt_absolute_time();
+
+    struct pixy_cam_pts_s pixy_cam_pts;
+    memset(&pixy_cam_pts, 0, sizeof(pixy_cam_pts));
+
+    pixy_cam_pts.timestamp = timestamp;
+    pixy_cam_pts.count = pts.count;
+
+    int count = pts.count;
+    for( int i=0; i<count; ++i )
+    {
+        pixy_cam_pts.x[i] = pts.x[i];
+        pixy_cam_pts.y[i] = pts.y[i];
+        pixy_cam_pts.width[i] = pts.width[i];
+        pixy_cam_pts.heigth[i] = pts.height[i];
+    }
+
+    if (_pixy_cam_pts_pub == nullptr) {
+        _pixy_cam_pts_pub = orb_advertise(ORB_ID(pixy_cam_pts), &pixy_cam_pts);
+
+    } else {
+        orb_publish(ORB_ID(pixy_cam_pts), _pixy_cam_pts_pub, &pixy_cam_pts);
+    }
+}
 
 /**
  * Receive data from UART.

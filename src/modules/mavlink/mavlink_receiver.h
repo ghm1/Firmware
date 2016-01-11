@@ -74,6 +74,8 @@
 #include <uORB/topics/vehicle_force_setpoint.h>
 #include <uORB/topics/time_offset.h>
 #include <uORB/topics/distance_sensor.h>
+#include <uORB/topics/pixy_cam_pts.h>
+#include "v1.0/common/mavlink_msg_pixy_cam_pts.h"
 
 #include "mavlink_ftp.h"
 
@@ -138,6 +140,7 @@ private:
 	void handle_message_hil_state_quaternion(mavlink_message_t *msg);
 	void handle_message_distance_sensor(mavlink_message_t *msg);
     //ghm1mavtodo
+    void handle_message_pixy_cam_pts(mavlink_message_t *msg);
 
 	void *receive_thread(void *arg);
 
@@ -195,6 +198,8 @@ private:
 	orb_advert_t _land_detector_pub;
 	orb_advert_t _time_offset_pub;
     //ghm1mavtodo
+    orb_advert_t _pixy_cam_pts_pub;
+
 	int _control_mode_sub;
 	int _hil_frames;
 	uint64_t _old_timestamp;
