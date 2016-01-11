@@ -173,18 +173,18 @@ TargetLand::set_target_land_item()
         _mission_item.lon = _navigator->get_target_land_position()->lon;
 		 // don't change altitude
 
-		 if (pos_sp_triplet->previous.valid) {
-		 	/* if previous setpoint is valid then use it to calculate heading to home */
-		 	_mission_item.yaw = get_bearing_to_next_waypoint(
-		 	        pos_sp_triplet->previous.lat, pos_sp_triplet->previous.lon,
-		 	        _mission_item.lat, _mission_item.lon);
+         if (pos_sp_triplet->previous.valid) {
+            /* if previous setpoint is valid then use it to calculate heading to home */
+            _mission_item.yaw = get_bearing_to_next_waypoint(
+                    pos_sp_triplet->previous.lat, pos_sp_triplet->previous.lon,
+                    _mission_item.lat, _mission_item.lon);
 
-		 } else {
+         } else {
 		 	/* else use current position */
 		 	_mission_item.yaw = get_bearing_to_next_waypoint(
 		 	        _navigator->get_global_position()->lat, _navigator->get_global_position()->lon,
 		 	        _mission_item.lat, _mission_item.lon);
-		 }
+         }
 		_mission_item.loiter_radius = _navigator->get_loiter_radius();
 		_mission_item.loiter_direction = 1;
 		_mission_item.nav_cmd = NAV_CMD_WAYPOINT;
@@ -337,7 +337,9 @@ TargetLand::advance_target_land()
     //Darin evtl. auch sinken stoppen, wenn Abweichung vom Target zu gross.
     switch (_target_land_state) {
     case TARGET_LAND_STATE_CLIMB:
-        _target_land_state = TARGET_LAND_STATE_RETURN;
+        //_target_land_state = TARGET_LAND_STATE_RETURN;
+        //debug
+        _target_land_state = TARGET_LAND_STATE_ADJUST_YAW;
         warnx("[TargetLand] advance_target_land: TARGET_LAND_STATE_RETURN");
 		break;
 

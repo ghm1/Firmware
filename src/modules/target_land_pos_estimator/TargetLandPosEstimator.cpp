@@ -171,7 +171,7 @@ TargetLandPosEstimator::task_main()
             //if we dont have valid local position reference continue
             if( !_local_pos.xy_valid && !_local_pos.z_valid )
             {
-                warnx("[target_land_pos_estimator] invalid local position");
+                //warnx("[target_land_pos_estimator] invalid local position");
                 continue;
             }
 
@@ -194,6 +194,9 @@ TargetLandPosEstimator::task_main()
 
             //calculate yaw
             float yaw = atan2(_target.F(1), _target.F(0));
+            warnx("shift_xyz: x= %.2f, y= %.2f, z=%.2f, yaw_est: %.2f", (double)_shift_xyz(0), (double)_shift_xyz(1), (double)_shift_xyz(2), (double)yaw );
+            //debug
+            yaw = 0.0;
 
             //Add shift to local position. As we are in a Body-NED frame it is just a summation.
             _targetPosGlobal(0) = _shift_xyz(0) + _local_pos.x;
@@ -222,7 +225,7 @@ TargetLandPosEstimator::task_main()
             _target_land_position.direction_y = 0.0f;
             _target_land_position.direction_z = 0.0f;
 
-            warnx("[target_land_pos_estimator] advertising global position");
+            //warnx("[target_land_pos_estimator] advertising global position");
             //send new target land position over uorb
             if (_target_land_position_pub == nullptr) {
                 _target_land_position_pub = orb_advertise(ORB_ID(target_land_position), &_target_land_position);
@@ -315,7 +318,7 @@ TargetLandPosEstimator::calculateTargetToCameraShift()
 
         if(_target.valid)
         {
-            warnx("TargetLandPosEstimator:calculateTargetToCameraShift: target valid");
+            //warnx("TargetLandPosEstimator:calculateTargetToCameraShift: target valid");
 
             //calculate heigth above target
             _shift_xyz(2) = TARGET_DISTANCE_L_R / _target.distLR;
@@ -324,7 +327,7 @@ TargetLandPosEstimator::calculateTargetToCameraShift()
             _shift_xyz(1) = _target.M(1) * _shift_xyz(2);
 
             //warnx("distLR: %.2f", (double)_target.distLR);
-            warnx("_shift_xyz: x= %.2f, y= %.2f, z=%.2f ", (double)_shift_xyz(0), (double)_shift_xyz(1), (double)_shift_xyz(2) );
+
         }
     }
 }
