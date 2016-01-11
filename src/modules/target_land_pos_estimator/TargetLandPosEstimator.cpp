@@ -152,7 +152,7 @@ TargetLandPosEstimator::task_main()
 
             /* timed out - periodic check for _task_should_exit */
             if (pret == 0) {
-                warnx("[target_land_pos_estimator] poll timeout");
+                //warnx("[target_land_pos_estimator] poll timeout");
                 continue;
             }
 
@@ -161,6 +161,9 @@ TargetLandPosEstimator::task_main()
                 warn("poll error %d, %d", pret, errno);
                 continue;
             }
+
+            //reset target
+            _target.valid = false;
 
             //check if we have new messages on topics
             poll_subscriptions();
@@ -263,7 +266,7 @@ TargetLandPosEstimator::poll_subscriptions()
     orb_check(_camera_norm_coords_sub, &updated);
 
     if (updated) {
-        warnx("camera_norm_coords updated");
+        //warnx("camera_norm_coords updated");
         orb_copy(ORB_ID(camera_norm_coords), _camera_norm_coords_sub, &_camera_norm_coords);
     }
 }
@@ -273,6 +276,8 @@ TargetLandPosEstimator::calculateTargetToCameraShift()
 {
     if(_camera_norm_coords.count == 4)
     {
+        warnx("TargetLandPosEstimator:calculateTargetToCameraShift: 4 points received");
+
         //rotate points into NED frame (orthogonal camera rotated about z-axis)  (timestamps should be similar)
         math::Quaternion q_att(_ctrl_state.q[0], _ctrl_state.q[1], _ctrl_state.q[2], _ctrl_state.q[3]);
         math::Matrix<3, 3> R = q_att.to_dcm();
@@ -306,6 +311,8 @@ TargetLandPosEstimator::calculateTargetToCameraShift()
 
         if(_target.valid)
         {
+            warnx("TargetLandPosEstimator:calculateTargetToCameraShift: target valid");
+
             //calculate heigth above target
             _shift_xyz(2) = TARGET_DISTANCE_L_R / _target.distLR;
             //calculate x/y-position offset to target

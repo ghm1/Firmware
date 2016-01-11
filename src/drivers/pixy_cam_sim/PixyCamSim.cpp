@@ -141,8 +141,8 @@ PixyCamSim::task_main()
         //check if we have new messages on topics
         poll_subscriptions();
 
-        if(_pixy_cam_pts_s.count == 0)
-            continue;
+//        if(_pixy_cam_pts_s.count == 0)
+//            continue;
 
         //todo:
         //make intrinsic transformation
