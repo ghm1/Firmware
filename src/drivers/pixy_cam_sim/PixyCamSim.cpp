@@ -147,6 +147,7 @@ PixyCamSim::task_main()
         //todo:
         //make intrinsic transformation
         int count = _pixy_cam_pts_s.count;
+        _camera_norm_coords_s.count = count;
         for( int i=0; i<count; ++i )
         {
             //intrinsic transform

@@ -30,7 +30,7 @@
 
 //test diff #define TARGET_DISTANCE_L_R 2.0f
 //test results: -1.5, -1.0, 5.0
-#define TARGET_DISTANCE_L_R 0.25f
+#define TARGET_DISTANCE_L_R 0.5f
 
 
 using namespace target_land_pos_estimator;
@@ -169,8 +169,11 @@ TargetLandPosEstimator::task_main()
             poll_subscriptions();
 
             //if we dont have valid local position reference continue
-            if( _local_pos.xy_valid == true && _local_pos.z_valid )
+            if( !_local_pos.xy_valid && !_local_pos.z_valid )
+            {
+                warnx("[target_land_pos_estimator] invalid local position");
                 continue;
+            }
 
 //            int count = _camera_norm_coords.count;
 //            if(count == 4)
@@ -219,6 +222,7 @@ TargetLandPosEstimator::task_main()
             _target_land_position.direction_y = 0.0f;
             _target_land_position.direction_z = 0.0f;
 
+            warnx("[target_land_pos_estimator] advertising global position");
             //send new target land position over uorb
             if (_target_land_position_pub == nullptr) {
                 _target_land_position_pub = orb_advertise(ORB_ID(target_land_position), &_target_land_position);
@@ -276,7 +280,7 @@ TargetLandPosEstimator::calculateTargetToCameraShift()
 {
     if(_camera_norm_coords.count == 4)
     {
-        warnx("TargetLandPosEstimator:calculateTargetToCameraShift: 4 points received");
+        //warnx("TargetLandPosEstimator:calculateTargetToCameraShift: 4 points received");
 
         //rotate points into NED frame (orthogonal camera rotated about z-axis)  (timestamps should be similar)
         math::Quaternion q_att(_ctrl_state.q[0], _ctrl_state.q[1], _ctrl_state.q[2], _ctrl_state.q[3]);
@@ -318,7 +322,6 @@ TargetLandPosEstimator::calculateTargetToCameraShift()
             //calculate x/y-position offset to target
             _shift_xyz(0) = _target.M(0) * _shift_xyz(2);
             _shift_xyz(1) = _target.M(1) * _shift_xyz(2);
-            _target.valid = false;
 
             //warnx("distLR: %.2f", (double)_target.distLR);
             warnx("_shift_xyz: x= %.2f, y= %.2f, z=%.2f ", (double)_shift_xyz(0), (double)_shift_xyz(1), (double)_shift_xyz(2) );
