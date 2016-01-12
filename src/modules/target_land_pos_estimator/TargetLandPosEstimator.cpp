@@ -193,7 +193,7 @@ TargetLandPosEstimator::task_main()
                 continue;
 
             //calculate yaw
-            float yaw = atan2(_target.F(1), _target.F(0));
+            float yaw = atan2(_target.F(1) - _target.M(1), _target.F(0) - _target.M(1));
             warnx("shift_xyz: x= %.2f, y= %.2f, z=%.2f, yaw_est: %.2f", (double)_shift_xyz(0), (double)_shift_xyz(1), (double)_shift_xyz(2), (double)yaw );
             //debug
             yaw = 0.0;
