@@ -459,10 +459,11 @@ int commander_main(int argc, char *argv[])
             cmd.command = vehicle_command_s::VEHICLE_CMD_NAV_LAND;
 //            cmd.param1 = 0.25f; /* minimum pitch */
 //            /* param 2-3 unused */
-//            cmd.param4 = _home.yaw;
-//            cmd.param5 = _home.lat;
-//            cmd.param6 = _home.lon;
-//            cmd.param7 = _home.alt;
+            //cmd.param4 = _home.yaw;
+            cmd.param4 = 1.57;
+            cmd.param5 = _home.lat;
+            cmd.param6 = _home.lon;
+            cmd.param7 = _home.alt;
 
             // XXX inspect use of publication handle
             (void)orb_advertise(ORB_ID(vehicle_command), &cmd);
@@ -1037,7 +1038,8 @@ static void commander_set_home_position(orb_advert_t &homePub, home_position_s &
 
 	home.yaw = attitude.yaw;
 
-	mavlink_and_console_log_info(mavlink_fd, "home: %.7f, %.7f, %.2f", home.lat, home.lon, (double)home.alt);
+    mavlink_and_console_log_info(mavlink_fd, "home: %.7f, %.7f, %.2f", home.lat, home.lon, (double)home.alt);
+    warnx("home: %.7f, %.7f, %.2f, yaw: %.2f", home.lat, home.lon, (double)home.alt, (double)home.yaw);
 
 	/* announce new home position */
 	if (homePub != nullptr) {

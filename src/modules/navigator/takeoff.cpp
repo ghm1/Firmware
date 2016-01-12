@@ -74,7 +74,7 @@ void
 Takeoff::on_activation()
 {
 	/* set current mission item to Takeoff */
-	set_takeoff_item(&_mission_item, _param_min_alt.get());
+    set_takeoff_item(&_mission_item, _param_min_alt.get());
 	_navigator->get_mission_result()->reached = false;
 	_navigator->get_mission_result()->finished = false;
 	_navigator->set_mission_result_updated();
