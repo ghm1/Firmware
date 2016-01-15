@@ -30,7 +30,7 @@
 
 //test diff #define TARGET_DISTANCE_L_R 2.0f
 //test results: -1.5, -1.0, 5.0
-#define TARGET_DISTANCE_L_R 0.5f
+#define TARGET_DISTANCE_L_R 0.25f
 
 
 using namespace target_land_pos_estimator;
@@ -193,12 +193,13 @@ TargetLandPosEstimator::task_main()
                 continue;
 
             //calculate yaw
-            float yaw = atan2(_target.F(1) - _target.M(1), _target.F(0) - _target.M(1));
-            warnx("shift_xyz: x= %.2f, y= %.2f, z=%.2f, yaw_est: %.2f", (double)_shift_xyz(0), (double)_shift_xyz(1), (double)_shift_xyz(2), (double)yaw );
-            warnx("L: x= %.5f, y= %.5f, z=%.5f ", (double)_target.L(0), (double)_target.L(1), (double)_target.L(2) );
-            warnx("R: x= %.5f, y= %.5f, z=%.5f ", (double)_target.R(0), (double)_target.R(1), (double)_target.R(2) );
-            warnx("M: x= %.5f, y= %.5f, z=%.5f ", (double)_target.M(0), (double)_target.M(1), (double)_target.M(2) );
-            warnx("F: x= %.5f, y= %.5f, z=%.5f ", (double)_target.F(0), (double)_target.F(1), (double)_target.F(2) );
+            float yaw = atan2f(_target.F(1) - _target.M(1), _target.F(0) - _target.M(0));
+
+//            warnx("shift_xyz: x= %.2f, y= %.2f, z=%.2f, yaw_est: %.2f", (double)_shift_xyz(0), (double)_shift_xyz(1), (double)_shift_xyz(2), (double)yaw );
+//            warnx("L: x= %.5f, y= %.5f, z=%.5f ", (double)_target.L(0), (double)_target.L(1), (double)_target.L(2) );
+//            warnx("R: x= %.5f, y= %.5f, z=%.5f ", (double)_target.R(0), (double)_target.R(1), (double)_target.R(2) );
+//            warnx("M: x= %.5f, y= %.5f, z=%.5f ", (double)_target.M(0), (double)_target.M(1), (double)_target.M(2) );
+//            warnx("F: x= %.5f, y= %.5f, z=%.5f ", (double)_target.F(0), (double)_target.F(1), (double)_target.F(2) );
             //debug
             //yaw = 0.0;
 
