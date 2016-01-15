@@ -76,6 +76,7 @@
 #include <uORB/topics/vehicle_land_detected.h>
 #include <uORB/topics/estimator_status.h>
 #include <uORB/topics/pixy_cam_pts.h>
+#include <uORB/topics/target_land_position.h>
 #include <drivers/drv_rc_input.h>
 #include <drivers/drv_pwm_output.h>
 #include <systemlib/err.h>

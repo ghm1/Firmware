@@ -195,6 +195,10 @@ TargetLandPosEstimator::task_main()
             //calculate yaw
             float yaw = atan2(_target.F(1) - _target.M(1), _target.F(0) - _target.M(1));
             warnx("shift_xyz: x= %.2f, y= %.2f, z=%.2f, yaw_est: %.2f", (double)_shift_xyz(0), (double)_shift_xyz(1), (double)_shift_xyz(2), (double)yaw );
+            warnx("L: x= %.5f, y= %.5f, z=%.5f ", (double)_target.L(0), (double)_target.L(1), (double)_target.L(2) );
+            warnx("R: x= %.5f, y= %.5f, z=%.5f ", (double)_target.R(0), (double)_target.R(1), (double)_target.R(2) );
+            warnx("M: x= %.5f, y= %.5f, z=%.5f ", (double)_target.M(0), (double)_target.M(1), (double)_target.M(2) );
+            warnx("F: x= %.5f, y= %.5f, z=%.5f ", (double)_target.F(0), (double)_target.F(1), (double)_target.F(2) );
             //debug
             yaw = 0.0;
 
@@ -221,9 +225,6 @@ TargetLandPosEstimator::task_main()
             _target_land_position.y = 0.0f;
             _target_land_position.z = 0.0f;
             _target_land_position.yaw = yaw;
-            _target_land_position.direction_x = 0.0f;
-            _target_land_position.direction_y = 0.0f;
-            _target_land_position.direction_z = 0.0f;
 
             //warnx("[target_land_pos_estimator] advertising global position");
             //send new target land position over uorb
@@ -507,10 +508,10 @@ TargetLandPosEstimator::test1()
 //        {
 //            Target t = _targetCandidates.at(i);
 //            warnx("Candidate %d:", i);
-//            warnx("L: x= %.2f, y= %.2f, z=%.2f ", (double)t.L(0), (double)t.L(1), (double)t.L(3) );
-//            warnx("R: x= %.2f, y= %.2f, z=%.2f ", (double)t.R(0), (double)t.R(1), (double)t.R(3) );
-//            warnx("M: x= %.2f, y= %.2f, z=%.2f ", (double)t.M(0), (double)t.M(1), (double)t.M(3) );
-//            warnx("F: x= %.2f, y= %.2f, z=%.2f ", (double)t.F(0), (double)t.F(1), (double)t.F(3) );
+//            warnx("L: x= %.2f, y= %.2f, z=%.2f ", (double)t.L(0), (double)t.L(1), (double)t.L(2) );
+//            warnx("R: x= %.2f, y= %.2f, z=%.2f ", (double)t.R(0), (double)t.R(1), (double)t.R(2) );
+//            warnx("M: x= %.2f, y= %.2f, z=%.2f ", (double)t.M(0), (double)t.M(1), (double)t.M(2) );
+//            warnx("F: x= %.2f, y= %.2f, z=%.2f ", (double)t.F(0), (double)t.F(1), (double)t.F(2) );
 //            warnx("distM: %.2f", (double)t.distM);
 //            warnx("distF: %.2f", (double)t.distF);
 //            warnx("distLR: %.2f", (double)t.distLR);
@@ -545,9 +546,6 @@ TargetLandPosEstimator::test2()
         _target_land_position.z = 0.0f;
 
         _target_land_position.yaw = - 3.14;
-        _target_land_position.direction_x = 0.0f;
-        _target_land_position.direction_y = 0.0f;
-        _target_land_position.direction_z = 0.0f;
 
         //send new target land position over uorb
         if (_target_land_position_pub == nullptr) {
@@ -714,9 +712,6 @@ TargetLandPosEstimator::test3()
         _target_land_position.y = 0.0f;
         _target_land_position.z = 0.0f;
         _target_land_position.yaw = yaw;
-        _target_land_position.direction_x = 0.0f;
-        _target_land_position.direction_y = 0.0f;
-        _target_land_position.direction_z = 0.0f;
 
         //warnx("[target_land_pos_estimator] tarlpos: x= %.5f, y= %.5f, z= %.5f", _target_land_position.lat, _target_land_position.lon, (double)_target_land_position.alt );
 

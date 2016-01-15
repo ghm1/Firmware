@@ -126,6 +126,7 @@ MavlinkReceiver::MavlinkReceiver(Mavlink *parent) :
 	_land_detector_pub(nullptr),
 	_time_offset_pub(nullptr),
     _pixy_cam_pts_pub(nullptr),
+    _target_land_position_pub(nullptr),
 	_control_mode_sub(orb_subscribe(ORB_ID(vehicle_control_mode))),
 	_hil_frames(0),
 	_old_timestamp(0),
@@ -226,6 +227,10 @@ MavlinkReceiver::handle_message(mavlink_message_t *msg)
 	case MAVLINK_MSG_ID_DISTANCE_SENSOR:
 		handle_message_distance_sensor(msg);
 		break;
+
+//    case MAVLINK_MSG_ID_TARGET_LAND_POSITION:
+//        handle_message_target_land_position();
+//        break;
 
 	default:
 		break;
@@ -1773,6 +1778,35 @@ MavlinkReceiver::handle_message_pixy_cam_pts(mavlink_message_t *msg)
     } else {
         orb_publish(ORB_ID(pixy_cam_pts), _pixy_cam_pts_pub, &pixy_cam_pts);
     }
+}
+
+void
+MavlinkReceiver::handle_message_target_land_position(mavlink_message_t *msg)
+{
+//    mavlink_target_land_position_t pts;
+//    mavlink_msg_target_land_position_decode(msg, &pts);
+
+//    uint64_t timestamp = hrt_absolute_time();
+
+//    struct target_land_position_s target_land_position;
+//    memset(&target_land_position, 0, sizeof(target_land_position));
+
+//    target_land_position.timestamp = timestamp;
+//    target_land_position.count = pts.count;
+
+//    int count = pts.count;
+//    for( int i=0; i<count; ++i )
+//    {
+//        target_land_position.lat = msg.lat;
+
+//    }
+
+//    if (_target_land_position_pub == nullptr) {
+//        _target_land_position_pub = orb_advertise(ORB_ID(target_land_position), &target_land_position);
+
+//    } else {
+//        orb_publish(ORB_ID(target_land_position), _target_land_position_pub, &target_land_position);
+//    }
 }
 
 /**
