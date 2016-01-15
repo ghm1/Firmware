@@ -228,9 +228,9 @@ MavlinkReceiver::handle_message(mavlink_message_t *msg)
 		handle_message_distance_sensor(msg);
 		break;
 
-//    case MAVLINK_MSG_ID_TARGET_LAND_POSITION:
-//        handle_message_target_land_position();
-//        break;
+    case MAVLINK_MSG_ID_TARGET_LAND_POSITION:
+        handle_message_target_land_position(msg);
+        break;
 
 	default:
 		break;
@@ -1783,30 +1783,29 @@ MavlinkReceiver::handle_message_pixy_cam_pts(mavlink_message_t *msg)
 void
 MavlinkReceiver::handle_message_target_land_position(mavlink_message_t *msg)
 {
-//    mavlink_target_land_position_t pts;
-//    mavlink_msg_target_land_position_decode(msg, &pts);
+    mavlink_target_land_position_t pts;
+    mavlink_msg_target_land_position_decode(msg, &pts);
 
-//    uint64_t timestamp = hrt_absolute_time();
+    uint64_t timestamp = hrt_absolute_time();
 
-//    struct target_land_position_s target_land_position;
-//    memset(&target_land_position, 0, sizeof(target_land_position));
+    struct target_land_position_s target_land_position;
+    memset(&target_land_position, 0, sizeof(target_land_position));
 
-//    target_land_position.timestamp = timestamp;
-//    target_land_position.count = pts.count;
+    target_land_position.timestamp = timestamp;
+    target_land_position.lat = ((double)pts.lat) / 1e7;
+    target_land_position.lon = ((double)pts.lon) / 1e7;
+    target_land_position.alt = pts.alt / 1000.f;
+    target_land_position.x = pts.x;
+    target_land_position.y = pts.y;
+    target_land_position.z = pts.z;
+    target_land_position.yaw = pts.yaw;
 
-//    int count = pts.count;
-//    for( int i=0; i<count; ++i )
-//    {
-//        target_land_position.lat = msg.lat;
+    if (_target_land_position_pub == nullptr) {
+        _target_land_position_pub = orb_advertise(ORB_ID(target_land_position), &target_land_position);
 
-//    }
-
-//    if (_target_land_position_pub == nullptr) {
-//        _target_land_position_pub = orb_advertise(ORB_ID(target_land_position), &target_land_position);
-
-//    } else {
-//        orb_publish(ORB_ID(target_land_position), _target_land_position_pub, &target_land_position);
-//    }
+    } else {
+        orb_publish(ORB_ID(target_land_position), _target_land_position_pub, &target_land_position);
+    }
 }
 
 /**

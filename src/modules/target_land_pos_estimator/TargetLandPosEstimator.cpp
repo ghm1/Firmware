@@ -200,7 +200,7 @@ TargetLandPosEstimator::task_main()
             warnx("M: x= %.5f, y= %.5f, z=%.5f ", (double)_target.M(0), (double)_target.M(1), (double)_target.M(2) );
             warnx("F: x= %.5f, y= %.5f, z=%.5f ", (double)_target.F(0), (double)_target.F(1), (double)_target.F(2) );
             //debug
-            yaw = 0.0;
+            //yaw = 0.0;
 
             //Add shift to local position. As we are in a Body-NED frame it is just a summation.
             _targetPosGlobal(0) = _shift_xyz(0) + _local_pos.x;
@@ -221,9 +221,9 @@ TargetLandPosEstimator::task_main()
             _target_land_position.lat = est_lat;
             _target_land_position.lon = est_lon;
             _target_land_position.alt = est_alt;
-            _target_land_position.x = 0.0f;
-            _target_land_position.y = 0.0f;
-            _target_land_position.z = 0.0f;
+            _target_land_position.x = _shift_xyz(0);
+            _target_land_position.y = _shift_xyz(1);
+            _target_land_position.z = _shift_xyz(2);
             _target_land_position.yaw = yaw;
 
             //warnx("[target_land_pos_estimator] advertising global position");

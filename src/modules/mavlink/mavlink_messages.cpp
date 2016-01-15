@@ -2701,6 +2701,70 @@ protected:
 	}
 };
 
+class MavlinkStreamTargetLandPosition : public MavlinkStream
+{
+public:
+    const char *get_name() const
+    {
+        return MavlinkStreamTargetLandPosition::get_name_static();
+    }
+
+    static const char *get_name_static()
+    {
+        return "TARGET_LAND_POSITION";
+    }
+
+    uint8_t get_id()
+    {
+        return MAVLINK_MSG_ID_TARGET_LAND_POSITION;
+    }
+
+    static MavlinkStream *new_instance(Mavlink *mavlink)
+    {
+        return new MavlinkStreamTargetLandPosition(mavlink);
+    }
+
+    unsigned get_size()
+    {
+        return MAVLINK_MSG_ID_TARGET_LAND_POSITION_LEN + MAVLINK_NUM_NON_PAYLOAD_BYTES;
+    }
+
+private:
+    MavlinkOrbSubscription *_tl_sub;
+    uint64_t _tl_time;
+
+    /* do not allow top copying this class */
+    MavlinkStreamTargetLandPosition(MavlinkStreamTargetLandPosition &);
+    MavlinkStreamTargetLandPosition& operator = (const MavlinkStreamTargetLandPosition &);
+
+
+protected:
+    explicit MavlinkStreamTargetLandPosition(Mavlink *mavlink) : MavlinkStream(mavlink),
+        _tl_sub(_mavlink->add_orb_subscription(ORB_ID(target_land_position))),
+        _tl_time(0)
+    {}
+
+    void send(const hrt_abstime t)
+    {
+        struct target_land_position_s tl;
+
+        if (_tl_sub->update(&_tl_time, &tl)) {
+            mavlink_target_land_position_t msg;
+
+            msg.time_usec = tl.timestamp;
+            msg.lat = (uint32_t)(tl.lat * 1e7);
+            msg.lon = (uint32_t)(tl.lon * 1e7);
+            msg.alt = tl.alt * 1000.f;
+            msg.x = tl.x;
+            msg.y = tl.y;
+            msg.z = tl.z;
+            msg.yaw = tl.yaw;
+
+            _mavlink->send_message(MAVLINK_MSG_ID_TARGET_LAND_POSITION, &msg);
+        }
+    }
+};
+
 const StreamListItem *streams_list[] = {
 	new StreamListItem(&MavlinkStreamHeartbeat::new_instance, &MavlinkStreamHeartbeat::get_name_static),
 	new StreamListItem(&MavlinkStreamStatustext::new_instance, &MavlinkStreamStatustext::get_name_static),
@@ -2740,5 +2804,6 @@ const StreamListItem *streams_list[] = {
 	new StreamListItem(&MavlinkStreamDistanceSensor::new_instance, &MavlinkStreamDistanceSensor::get_name_static),
 	new StreamListItem(&MavlinkStreamExtendedSysState::new_instance, &MavlinkStreamExtendedSysState::get_name_static),
 	new StreamListItem(&MavlinkStreamAltitude::new_instance, &MavlinkStreamAltitude::get_name_static),
+    new StreamListItem(&MavlinkStreamTargetLandPosition::new_instance, &MavlinkStreamTargetLandPosition::get_name_static),
 	nullptr
 };
