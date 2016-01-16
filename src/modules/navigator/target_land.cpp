@@ -226,6 +226,7 @@ TargetLand::set_target_land_item()
 	_navigator->set_can_loiter_at_sp(false);
 
     switch (_target_land_state) {
+
     case TARGET_LAND_STATE_CLIMB: {
         //we climb at the current position to our target heigth
         float climb_alt = _navigator->get_target_land_position()->alt + _param_return_alt.get();
@@ -280,7 +281,7 @@ TargetLand::set_target_land_item()
 		_mission_item.loiter_radius = _navigator->get_loiter_radius();
 		_mission_item.loiter_direction = 1;
 		_mission_item.nav_cmd = NAV_CMD_WAYPOINT;
-        _mission_item.acceptance_radius = _navigator->get_acceptance_radius();
+        _mission_item.acceptance_radius =  _param_acc_radius_at_alt.get();
         _mission_item.time_inside = 1.0f;
 		_mission_item.pitch_min = 0.0f;
 		_mission_item.autocontinue = true;
@@ -368,7 +369,7 @@ TargetLand::set_target_land_item()
         _mission_item.loiter_direction = 1; //FW
         //todo ? time limit?
         //_mission_item.nav_cmd = NAV_CMD_LOITER_TIME_LIMIT;
-        _mission_item.nav_cmd = NAV_CMD_LAND;
+        _mission_item.nav_cmd = NAV_CMD_LOITER_TIME_LIMIT;
         _mission_item.acceptance_radius = _param_acc_radius_at_alt.get();
         _mission_item.time_inside = 3.0f;
         _mission_item.pitch_min = 0.0f;

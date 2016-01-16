@@ -1442,7 +1442,7 @@ MulticopterPositionControl::task_main()
                 //ghm1: ist die Geschwindigkeit grösser als die zulässige maximalgeschwindigkeit..
 				if (vel_norm_xy > _params.vel_max(0)) {
 					/* note assumes vel_max(0) == vel_max(1) */
-                    //ghm1: geschwindigkeitsvektor auf länge 1 normierten und mit maximalgeschwindigkeit skalieren
+                    //ghm1: geschwindigkeitsvektor auf länge 1 normieren und mit maximalgeschwindigkeit skalieren
 					_vel_sp(0) = _vel_sp(0) * _params.vel_max(0) / vel_norm_xy;
 					_vel_sp(1) = _vel_sp(1) * _params.vel_max(1) / vel_norm_xy;
 				}
@@ -1483,7 +1483,6 @@ MulticopterPositionControl::task_main()
 					_vel_sp(2) = _params.land_speed;
 				}
 
-                //ghm1: mit der bestimmung der velocity sind wir fertig, also zuweisen und publizieren
 				/* velocity handling during takeoff */
 				if (!_control_mode.flag_control_manual_enabled && _pos_sp_triplet.current.valid
 				    && _pos_sp_triplet.current.type == position_setpoint_s::SETPOINT_TYPE_TAKEOFF) {
@@ -1529,6 +1528,7 @@ MulticopterPositionControl::task_main()
 				_global_vel_sp.vy = _vel_sp(1);
 				_global_vel_sp.vz = _vel_sp(2);
 
+                //ghm1: mit der bestimmung der velocity sind wir fertig, also zuweisen und publizieren
 				/* publish velocity setpoint */
 				if (_global_vel_sp_pub != nullptr) {
 					orb_publish(ORB_ID(vehicle_global_velocity_setpoint), _global_vel_sp_pub, &_global_vel_sp);
