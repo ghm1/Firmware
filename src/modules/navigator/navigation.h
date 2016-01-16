@@ -94,6 +94,7 @@ struct mission_item_s {
 	int8_t loiter_direction;	/**< 1: positive / clockwise, -1, negative.		*/
 	unsigned nav_cmd;		/**< navigation command					*/
 	float acceptance_radius;	/**< default radius in which the mission is accepted as reached in meters */
+    //float acceptance_yaw;   /**< excepted absolute error in which the mission is accepted as reached in radians */
 	float time_inside;		/**< time that the MAV should stay inside the radius before advancing in seconds */
 	float pitch_min;		/**< minimal pitch angle for fixed wing takeoff waypoints */
 	bool autocontinue;		/**< true if next waypoint should follow after this one */

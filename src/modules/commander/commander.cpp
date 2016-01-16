@@ -954,8 +954,9 @@ bool handle_command(struct vehicle_status_s *status_local, const struct safety_s
     //ghm1test
 	case vehicle_command_s::VEHICLE_CMD_NAV_LAND: {
         //ghm1: param2 indicates, if we want to land on the known target or at current position
-            if( (int)cmd->param2 != 1 ) {
-                warnx("landing: param2 is %d", (int)cmd->param2 );
+            //if( (int)cmd->param2 != 1 ) {
+            if( status.condition_target_land_position_valid == false ) {
+                //warnx("landing: param2 is %d", (int)cmd->param2 );
                 /* ok, home set, use it to take off */
                 if (TRANSITION_CHANGED == main_state_transition(&status, vehicle_status_s::MAIN_STATE_AUTO_LAND)) {
                     warnx("[commander] handle_command: landing initialized");
@@ -963,7 +964,7 @@ bool handle_command(struct vehicle_status_s *status_local, const struct safety_s
                     warnx("landing denied");
                 }
             } else {
-                warnx("landing: param2 is %d", (int)cmd->param2 );
+                //warnx("landing: param2 is %d", (int)cmd->param2 );
                 //we try to land on the target
                 if (TRANSITION_CHANGED == main_state_transition(&status, vehicle_status_s::MAIN_STATE_TARGET_LAND)) {
                     warnx("[commander] handle_command: target landing initialized");

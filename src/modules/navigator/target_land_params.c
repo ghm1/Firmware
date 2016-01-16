@@ -53,7 +53,7 @@
  * @max 150
  * @group Return To Land
  */
-PARAM_DEFINE_FLOAT(TARGET_LAND_RETURN_ALT, 10);
+PARAM_DEFINE_FLOAT(TL_RETURN_ALT, 10);
 
 
 /**
@@ -67,7 +67,7 @@ PARAM_DEFINE_FLOAT(TARGET_LAND_RETURN_ALT, 10);
  * @max 100
  * @group Return To Land
  */
-PARAM_DEFINE_FLOAT(TARGET_LAND_DESCEND_ALT, 1);
+PARAM_DEFINE_FLOAT(TL_DESCEND_ALT, 1);
 
 /**
  * TARGET_LAND delay
@@ -80,7 +80,7 @@ PARAM_DEFINE_FLOAT(TARGET_LAND_DESCEND_ALT, 1);
  * @max 300
  * @group Return To Land
  */
-PARAM_DEFINE_FLOAT(TARGET_LAND_LAND_DELAY, 4.0f);
+PARAM_DEFINE_FLOAT(TL_LAND_DELAY, 4.0f);
 
 /**
  * TARGET_LAND Acceptance Radius at TARGET_LAND_RETURN_ALT over target
@@ -91,11 +91,11 @@ PARAM_DEFINE_FLOAT(TARGET_LAND_LAND_DELAY, 4.0f);
  * @max 5.0
  * @group Mission
  */
-PARAM_DEFINE_FLOAT(TARGET_LAND_ACC_RAD_AT_ALT, 0.5f);
+PARAM_DEFINE_FLOAT(TL_ACCEPTRAD_ALT, 0.5f);
 
 
 /**
- * TARGET_LAND Acceptance Radius
+ * TARGET_LAND Acceptance Radius, in which vehicle hast to stay for more than
  *
  *
  * @unit meter
@@ -103,4 +103,4 @@ PARAM_DEFINE_FLOAT(TARGET_LAND_ACC_RAD_AT_ALT, 0.5f);
  * @max 1.0
  * @group Mission
  */
-PARAM_DEFINE_FLOAT(TARGET_LAND_ACC_RAD_OVER_TARGET, 0.05f);
+PARAM_DEFINE_FLOAT(TL_ACCEPTRAD_TAR, 0.05f);

@@ -30,7 +30,7 @@
 
 //test diff #define TARGET_DISTANCE_L_R 2.0f
 //test results: -1.5, -1.0, 5.0
-#define TARGET_DISTANCE_L_R 0.25f
+#define TARGET_DISTANCE_L_R 0.5f
 
 
 using namespace target_land_pos_estimator;

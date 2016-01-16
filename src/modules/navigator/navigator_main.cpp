@@ -139,6 +139,7 @@ Navigator::Navigator() :
 	_pos_sp_triplet_updated(false),
 	_pos_sp_triplet_published_invalid_once(false),
 	_mission_result_updated(false),
+    _target_land_pos_updated(false),
 	_navigation_mode(nullptr),
 	_mission(this, "MIS"),
 	_loiter(this, "LOI"),
@@ -154,7 +155,7 @@ Navigator::Navigator() :
 	_param_loiter_radius(this, "LOITER_RAD"),
 	_param_acceptance_radius(this, "ACC_RAD"),
 	_param_datalinkloss_obc(this, "DLL_OBC"),
-	_param_rcloss_obc(this, "RCL_OBC")
+    _param_rcloss_obc(this, "RCL_OBC")
 {
 	/* Create a list of our possible navigation types */
 	_navigation_mode_array[0] = &_mission;
@@ -400,8 +401,10 @@ Navigator::task_main()
 		}
 
         /* target land position update */
-        orb_check(_target_land_position_sub, &updated);
-        if (updated) {
+        //ghm1: extra flag which we can check in TargetLand NavigationMode
+        _target_land_pos_updated = false;
+        orb_check(_target_land_position_sub, &_target_land_pos_updated);
+        if (_target_land_pos_updated) {
             orb_copy(ORB_ID(target_land_position), _target_land_position_sub, &_target_land_position);
         }
 
@@ -636,6 +639,8 @@ Navigator::get_acceptance_radius(float mission_item_radius)
 	float radius = mission_item_radius;
 
 	if (hrt_elapsed_time(&_nav_caps.timestamp) < 5000000) {
+        //ghm1proof
+        warnx("ghm1proof: acceptance radius set turn distance");
 		if (_nav_caps.turn_distance > radius) {
 			radius = _nav_caps.turn_distance;
 		}

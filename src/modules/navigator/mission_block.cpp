@@ -102,7 +102,13 @@ MissionBlock::is_mission_item_reached()
 
 	hrt_abstime now = hrt_absolute_time();
 
+    //ghm1: first we have to reach waypoint, after that we check if yaw (mission_item.yaw) is reached. Then a timer starts
+    // and mission is reached, as soon as the time is expired (mission_item.time_inside)
+    //todo: timer starts as soon as setpoint was only reached once. this can also happen if we overshoot! then the setpoint
+    //is not really reached. For this case one should reset timer, if waypoint and yaw are not reached anymore.
+
 	if (!_waypoint_position_reached) {
+        //ghm1: setpoint not reached yet
 		float dist = -1.0f;
 		float dist_xy = -1.0f;
 		float dist_z = -1.0f;
@@ -155,6 +161,8 @@ MissionBlock::is_mission_item_reached()
 
 			/* if set to zero use the default instead */
 			if (mission_acceptance_radius < NAV_EPSILON_POSITION) {
+                //ghm1proof
+                warnx("ghm1proof: acceptance radius set to default");
 				mission_acceptance_radius = _navigator->get_acceptance_radius();
 			}
 
@@ -164,7 +172,7 @@ MissionBlock::is_mission_item_reached()
 		}
 	}
 
-	/* Check if the waypoint and the requested yaw setpoint. */
+    /* Check if the waypoint and the requested yaw setpoint are reached. */
 	if (_waypoint_position_reached && !_waypoint_yaw_reached) {
 
 		/* TODO: removed takeoff, why? */
@@ -175,9 +183,14 @@ MissionBlock::is_mission_item_reached()
 
 			if (fabsf(yaw_err) < 0.2f) { /* TODO: get rid of magic number */
 				_waypoint_yaw_reached = true;
+
+                //ghm1proof
+                warnx("ghm1proof: yaw reached");
 			}
 
 		} else {
+            //ghm1proof
+            warnx("ghm1proof: yaw reached without testing!");
 			_waypoint_yaw_reached = true;
 		}
 	}
@@ -200,6 +213,156 @@ MissionBlock::is_mission_item_reached()
 		}
 	}
 	return false;
+}
+
+bool
+MissionBlock::is_mission_item_reached_precisely(float yawError)
+{
+    if (_mission_item.nav_cmd == NAV_CMD_DO_SET_SERVO) {
+        actuator_pub_fd = orb_advertise(ORB_ID(actuator_controls_2), &actuators);
+        memset(&actuators, 0, sizeof(actuators));
+        actuators.control[_mission_item.actuator_num] = 1.0f / 2000 * -_mission_item.actuator_value;
+        actuators.timestamp = hrt_absolute_time();
+        orb_publish(ORB_ID(actuator_controls_2), actuator_pub_fd, &actuators);
+        return true;
+    }
+
+    if (_mission_item.nav_cmd == NAV_CMD_IDLE) {
+        return false;
+    }
+
+    if (_mission_item.nav_cmd == NAV_CMD_LAND) {
+        return _navigator->get_vstatus()->condition_landed;
+    }
+
+    /* TODO: count turns */
+    if (/*_mission_item.nav_cmd == NAV_CMD_LOITER_TURN_COUNT ||*/
+         _mission_item.nav_cmd == NAV_CMD_LOITER_UNLIMITED) {
+        return false;
+    }
+
+    hrt_abstime now = hrt_absolute_time();
+
+    //ghm1: first we have to reach waypoint, after that we check if yaw (mission_item.yaw) is reached. Then a timer starts
+    // and mission is reached, as soon as the time is expired (mission_item.time_inside)
+    //todo: timer starts as soon as setpoint was only reached once. this can also happen if we overshoot! then the setpoint
+    //is not really reached. For this case one should reset timer, if waypoint and yaw are not reached anymore.
+
+    //reset: we want to test this every time
+    _waypoint_position_reached = false;
+    _waypoint_yaw_reached = false;
+    //now start checking if previous still holds
+
+    //ghm1: setpoint not reached yet
+    float dist = -1.0f;
+    float dist_xy = -1.0f;
+    float dist_z = -1.0f;
+
+    float altitude_amsl = _mission_item.altitude_is_relative
+                  ? _mission_item.altitude + _navigator->get_home_position()->alt
+                      : _mission_item.altitude;
+
+    dist = get_distance_to_point_global_wgs84(_mission_item.lat, _mission_item.lon, altitude_amsl,
+                                      _navigator->get_global_position()->lat,
+                          _navigator->get_global_position()->lon,
+                          _navigator->get_global_position()->alt,
+            &dist_xy, &dist_z);
+
+    if (_mission_item.nav_cmd == NAV_CMD_TAKEOFF && _navigator->get_vstatus()->is_rotary_wing) {
+        /* require only altitude for takeoff for multicopter */
+
+        /* _mission_item.acceptance_radius is not always set */
+        float mission_acceptance_radius = _mission_item.acceptance_radius;
+        /* if set to zero use the default instead */
+        if (mission_acceptance_radius < NAV_EPSILON_POSITION) {
+            mission_acceptance_radius = _navigator->get_acceptance_radius();
+        }
+
+        if (_navigator->get_global_position()->alt >
+            altitude_amsl - mission_acceptance_radius) {
+            _waypoint_position_reached = true;
+        }
+    } else if (_mission_item.nav_cmd == NAV_CMD_TAKEOFF) {
+        /* for takeoff mission items use the parameter for the takeoff acceptance radius */
+        if (dist >= 0.0f && dist <= _navigator->get_acceptance_radius()) {
+            _waypoint_position_reached = true;
+        }
+    } else if (!_navigator->get_vstatus()->is_rotary_wing &&
+        (_mission_item.nav_cmd == NAV_CMD_LOITER_UNLIMITED ||
+        _mission_item.nav_cmd == NAV_CMD_LOITER_TIME_LIMIT ||
+        _mission_item.nav_cmd == NAV_CMD_LOITER_TURN_COUNT)) {
+        /* Loiter mission item on a non rotary wing: the aircraft is going to circle the
+         * coordinates with a radius equal to the loiter_radius field. It is not flying
+         * through the waypoint center.
+         * Therefore the item is marked as reached once the system reaches the loiter
+         * radius (+ some margin). Time inside and turn count is handled elsewhere.
+         */
+        if (dist >= 0.0f && dist <= _navigator->get_acceptance_radius(_mission_item.loiter_radius * 1.2f)) {
+            _waypoint_position_reached = true;
+        }
+    } else {
+        /* for normal mission items used their acceptance radius */
+        float mission_acceptance_radius = _navigator->get_acceptance_radius(_mission_item.acceptance_radius);
+
+        /* if set to zero use the default instead */
+        if (mission_acceptance_radius < NAV_EPSILON_POSITION) {
+            //ghm1proof
+            warnx("ghm1proof: acceptance radius set to default");
+            mission_acceptance_radius = _navigator->get_acceptance_radius();
+        }
+
+        if (dist >= 0.0f && dist <= mission_acceptance_radius) {
+            _waypoint_position_reached = true;
+        }
+    }
+
+
+    /* Check if the waypoint and the requested yaw setpoint are reached. */
+    if (_waypoint_position_reached && !_waypoint_yaw_reached) {
+
+        /* TODO: removed takeoff, why? */
+        if (_navigator->get_vstatus()->is_rotary_wing && PX4_ISFINITE(_mission_item.yaw)) {
+
+            /* check yaw if defined only for rotary wing except takeoff */
+            float yaw_err = _wrap_pi(_mission_item.yaw - _navigator->get_global_position()->yaw);
+
+            if (fabsf(yaw_err) < yawError ) {
+                _waypoint_yaw_reached = true;
+
+                //ghm1proof
+                warnx("ghm1proof: yaw reached");
+            }
+
+        } else {
+            //ghm1proof
+            warnx("ghm1proof: yaw reached without testing!");
+            _waypoint_yaw_reached = true;
+        }
+    }
+
+    /* Once the waypoint and yaw setpoint have been reached we can start the loiter time countdown */
+    if (_waypoint_position_reached && _waypoint_yaw_reached) {
+
+        if (_time_first_inside_orbit == 0) {
+            _time_first_inside_orbit = now;
+
+            // if (_mission_item.time_inside > 0.01f) {
+            // 	mavlink_log_critical(_mavlink_fd, "waypoint reached, wait for %.1fs",
+            // 		(double)_mission_item.time_inside);
+            // }
+        }
+
+        /* check if the MAV was long enough inside the waypoint orbit */
+        if (now - _time_first_inside_orbit >= (hrt_abstime)_mission_item.time_inside * 1e6f) {
+            return true;
+        }
+    }
+    else {
+        //reset timer
+        _time_first_inside_orbit = 0;
+    }
+
+    return false;
 }
 
 void

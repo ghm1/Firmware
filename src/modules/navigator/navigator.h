@@ -155,6 +155,7 @@ public:
 	Geofence&	get_geofence() { return _geofence; }
 	bool		get_can_loiter_at_sp() { return _can_loiter_at_sp; }
 	float		get_loiter_radius() { return _param_loiter_radius.get(); }
+    bool        target_land_pos_updated() { return _target_land_pos_updated; }
 
 	/**
 	 * Get the acceptance radius
@@ -233,6 +234,7 @@ private:
 	bool		_pos_sp_triplet_updated;		/**< flags if position SP triplet needs to be published */
 	bool 		_pos_sp_triplet_published_invalid_once;	/**< flags if position SP triplet has been published once to UORB */
 	bool		_mission_result_updated;		/**< flags if mission result has seen an update */
+    bool        _target_land_pos_updated;       /**< flags if target land position has seen an update */
 
 	NavigatorMode	*_navigation_mode;		/**< abstract pointer to current navigation mode class */
 	Mission		_mission;			/**< class that handles the missions */

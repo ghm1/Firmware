@@ -80,18 +80,25 @@ private:
 	 */
     void		advance_target_land();
 
+    /**
+     * Check if target is visible
+     */
+    bool        target_visible();
+
     enum TARGET_LANDState {
         TARGET_LAND_STATE_NONE = 0,
         TARGET_LAND_STATE_CLIMB,
         TARGET_LAND_STATE_RETURN,
         TARGET_LAND_STATE_ADJUST_YAW,
-        TARGET_LAND_STATE_DESCEND,
-        TARGET_LAND_STATE_LOITER,
+        TARGET_LAND_STATE_GOTO_POS_HIGH,
+        TARGET_LAND_STATE_GOTO_LOITER_LOW,
+        TARGET_LAND_STATE_LOITER_LOW,
         TARGET_LAND_STATE_LAND,
         TARGET_LAND_STATE_LANDED,
     } _target_land_state;
 
     bool _target_land_start_lock;
+    bool _target_land_state_changed;
 
 	control::BlockParamFloat _param_return_alt;
 	control::BlockParamFloat _param_descend_alt;
@@ -99,6 +106,7 @@ private:
     /**< acceptance radius for loiter: point is reached, when copter inside this point */;
     control::BlockParamFloat _param_acc_radius_at_alt;
     control::BlockParamFloat _param_acc_radius_over_target;
+
 };
 
 #endif

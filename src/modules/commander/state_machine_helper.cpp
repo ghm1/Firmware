@@ -354,6 +354,15 @@ main_state_transition(struct vehicle_status_s *status, main_state_t new_main_sta
 	case vehicle_status_s::MAIN_STATE_AUTO_TAKEOFF:
 	case vehicle_status_s::MAIN_STATE_AUTO_LAND:
 		/* need global position and home position */
+//        if (status->condition_global_position_valid &&
+//                status->condition_home_position_valid &&
+//                status->condition_target_land_position_valid ) {
+//            warnx("[commander] main_state_transition: changed to MAIN_STATE_TARGET_LAND");
+//            //please force this (not really clean)
+//            //with this we can use the auto land from a mission from qgroundcontrol
+//            new_main_state = vehicle_status_s::MAIN_STATE_TARGET_LAND;
+//            ret = TRANSITION_CHANGED;
+//        }
 		if (status->condition_global_position_valid && status->condition_home_position_valid) {
 			ret = TRANSITION_CHANGED;
 		}
