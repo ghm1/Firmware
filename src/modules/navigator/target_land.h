@@ -81,9 +81,9 @@ private:
     void		advance_target_land();
 
     /**
-     * Check if target is visible
+     * Check if target was visible in the last timeSec seconds
      */
-    bool        target_visible();
+    bool        target_visible( float timeSec );
 
     enum TARGET_LANDState {
         TARGET_LAND_STATE_NONE = 0,
@@ -101,12 +101,13 @@ private:
     bool _target_land_state_changed;
 
 	control::BlockParamFloat _param_return_alt;
-	control::BlockParamFloat _param_descend_alt;
-	control::BlockParamFloat _param_land_delay;
-    /**< acceptance radius for loiter: point is reached, when copter inside this point */;
-    control::BlockParamFloat _param_acc_radius_at_alt;
-    control::BlockParamFloat _param_acc_radius_over_target;
-
+    control::BlockParamFloat _param_highpos_alt;
+    control::BlockParamFloat _param_loiterlow_alt;
+    control::BlockParamFloat _param_accept_radius_at_highpos;
+    control::BlockParamFloat _param_accep_radius_loiterlow;
+    control::BlockParamFloat _param_yaw_error_loiterlow;
+    control::BlockParamFloat _param_acceptance_time;
+    control::BlockParamFloat _param_invisible_timeout;
 };
 
 #endif

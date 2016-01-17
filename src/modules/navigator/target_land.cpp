@@ -61,10 +61,13 @@ TargetLand::TargetLand(Navigator *navigator, const char *name) :
     _target_land_start_lock(false),
     _target_land_state_changed(false),
     _param_return_alt(this, "TL_RETURN_ALT", false),
-    _param_descend_alt(this, "TL_DESCEND_ALT", false),
-    _param_land_delay(this, "TL_LAND_DELAY", false),
-    _param_acc_radius_at_alt(this, "TL_ACCEPTRAD_ALT", false),
-    _param_acc_radius_over_target(this, "TL_ACCEPTRAD_TAR", false)
+    _param_highpos_alt(this, "TL_HIGHPOS_ALT", false),
+    _param_loiterlow_alt(this, "TL_LOITERLOW_ALT", false),
+    _param_accept_radius_at_highpos(this, "TL_RADI_HIGHPOS", false),
+    _param_accep_radius_loiterlow(this, "TL_RADI_LOITRLOW", false),
+    _param_yaw_error_loiterlow(this, "TL_YAWERRLOITLOW", false),
+    _param_acceptance_time(this, "TL_ACCEPT_TIME", false),
+    _param_invisible_timeout(this, "TL_INVIS_TIMEOUT", false)
 {
 	/* load initial params */
 	updateParams();
@@ -90,11 +93,11 @@ TargetLand::on_inactive()
 
 
 bool
-TargetLand::target_visible()
+TargetLand::target_visible( float timeSec )
 {
     hrt_abstime now = hrt_absolute_time();
     hrt_abstime itemTimeStamp = _navigator->get_target_land_position()->timestamp;
-    if( ( now - itemTimeStamp ) > (hrt_abstime)1e6f ) {
+    if( ( now - itemTimeStamp ) > (hrt_abstime)(timeSec * 1e6f) ) {
         //ghm1proof
  //       warnx("ghm1proof: target invisible");
         return false;
@@ -122,7 +125,7 @@ TargetLand::on_activation()
         //ghm1 and !target_visible (compares timestamp of target_land_poisiton with current time)
         else if (_navigator->get_global_position()->alt < _navigator->get_target_land_position()->alt
                + _param_return_alt.get()
-                 && !target_visible())
+                 && !target_visible(2.0))
         {
             _target_land_state = TARGET_LAND_STATE_CLIMB;
             warnx("[TargetLand] on_activation: TARGET_LAND_STATE_CLIMB");
@@ -140,7 +143,6 @@ TargetLand::on_activation()
 
         //in every case the state has changed
         _target_land_state_changed = true;
-
 	}
 
     set_target_land_item();
@@ -149,9 +151,6 @@ TargetLand::on_activation()
 void
 TargetLand::on_active()
 {
-    //ghm1: if the mission item is reached AND we have not finished landing then call the statemachine,
-    //define the next mission item and set it as next setpoint in position setpoint triplet (in navigator)
-
     if(_target_land_state != TARGET_LAND_STATE_LANDED)
     {
         if( _target_land_state != TARGET_LAND_STATE_LOITER_LOW )
@@ -170,8 +169,7 @@ TargetLand::on_active()
             //in this case we want to be more precise:
             //we check if we are at the desired position with desired yaw for some time
             //time starts as soon as we enter position and is resetted, if we loose hold
-//todo: parameter for yaw
-            if (is_mission_item_reached_precisely(0.02))
+            if (is_mission_item_reached_precisely(_param_yaw_error_loiterlow.get()))
             {
                 //warnx("mission item reached precisely");
                 advance_target_land();
@@ -179,33 +177,29 @@ TargetLand::on_active()
             }
         }
 
-//        //during landing phase we dont correct
-//        if( _target_land_state != TARGET_LAND_STATE_LAND )
-//        {
-            //problem: wir haben zwar den state geändert, aber target_land_pos wurde nicht upgedated
-            //deshalb immer updaten, wenn state changed
 
-            //always update position setpoint if target land position has updated
-            if( _target_land_state_changed )
+        //always update position setpoint if target land position has updated
+        if( _target_land_state_changed )
+        {
+            set_target_land_item();
+            _target_land_state_changed = false;
+        }
+        else if( _navigator->target_land_pos_updated())
+        {
+            set_target_land_item();
+        }
+        else
+        {
+            //check if we are in LOITER_LOW state and target was out of FOV for a longer time
+            //then go to LOITER_HIGH
+            if( !target_visible(_param_invisible_timeout.get()) && _target_land_state == TARGET_LAND_STATE_LOITER_LOW )
             {
+                _target_land_state = TARGET_LAND_STATE_GOTO_POS_HIGH;
+                _target_land_state_changed = true;
                 set_target_land_item();
-                _target_land_state_changed = false;
             }
-            else if( _navigator->target_land_pos_updated())
-            {
-                set_target_land_item();
-            }
-            else
-            {
-                //check if we are in LOITER_LOW state and target was out of FOV for a longer time
-                //then go to LOITER_HIGH
-                if( !target_visible() && _target_land_state == TARGET_LAND_STATE_LOITER_LOW )
-                {
-                    _target_land_state = TARGET_LAND_STATE_GOTO_POS_HIGH;
-                    set_target_land_item();
-                }
-            }
-//        }
+        }
+
     }
 }
 
@@ -217,7 +211,7 @@ TargetLand::set_target_land_item()
 	/* make sure we have the latest params */
 	updateParams();
 
-    //ghm1todo: wofür ist des?
+    //ghm1todo: what is this for?
     if (!_target_land_start_lock) {
 		set_previous_pos_setpoint();
 	}
@@ -255,34 +249,19 @@ TargetLand::set_target_land_item()
         //we are at target height. lets fly to our target lat/lon position
         _mission_item.lat = _navigator->get_target_land_position()->lat;
         _mission_item.lon = _navigator->get_target_land_position()->lon;
-		 // don't change altitude
+        _mission_item.altitude_is_relative = false;
+        _mission_item.altitude = _navigator->get_target_land_position()->alt + _param_return_alt.get();
 
-         //todo: das funktioniert so nicht, wenn wir immer target_land position updaten:
-         // wir müssen uns climb lat lon merken
-         //wo merken:
-
-        //ausserdem macht das mit dem yaw anpassen turbulenzen
-//hier
-//         if (pos_sp_triplet->previous.valid) {
-//            /* if previous setpoint is valid then use it to calculate heading to home */
-//            _mission_item.yaw = get_bearing_to_next_waypoint(
-//                    pos_sp_triplet->previous.lat, pos_sp_triplet->previous.lon,
-//                    _mission_item.lat, _mission_item.lon);
-
-//         } else {
-		 	/* else use current position */
-
-        //erstmal testen
-		 	_mission_item.yaw = get_bearing_to_next_waypoint(
-		 	        _navigator->get_global_position()->lat, _navigator->get_global_position()->lon,
-		 	        _mission_item.lat, _mission_item.lon);
-//         }
+        _mission_item.yaw = get_bearing_to_next_waypoint(
+                _navigator->get_global_position()->lat, _navigator->get_global_position()->lon,
+                _mission_item.lat, _mission_item.lon);
+        //_mission_item.yaw = _navigator->get_target_land_position()->yaw;
 
 		_mission_item.loiter_radius = _navigator->get_loiter_radius();
 		_mission_item.loiter_direction = 1;
 		_mission_item.nav_cmd = NAV_CMD_WAYPOINT;
-        _mission_item.acceptance_radius =  _param_acc_radius_at_alt.get();
-        _mission_item.time_inside = 1.0f;
+        _mission_item.acceptance_radius =  _navigator->get_acceptance_radius();
+        _mission_item.time_inside = 0.0f;
 		_mission_item.pitch_min = 0.0f;
 		_mission_item.autocontinue = true;
 		_mission_item.origin = ORIGIN_ONBOARD;
@@ -295,21 +274,19 @@ TargetLand::set_target_land_item()
 		break;
 	}
 
-
-
-    //ghm1todo: diesen state brauchen wir eigentlich nicht, da ja erst auf jeden setpoint gewartet wird
-
     case TARGET_LAND_STATE_ADJUST_YAW: {
         //we are at target positino and return_alt height. now
         _mission_item.lat = _navigator->get_target_land_position()->lat;
         _mission_item.lon = _navigator->get_target_land_position()->lon;
-         // don't change altitude, but new yaw
+        _mission_item.altitude_is_relative = false;
+        _mission_item.altitude = _navigator->get_target_land_position()->alt + _param_return_alt.get();
+
         _mission_item.yaw = _navigator->get_target_land_position()->yaw;
         _mission_item.loiter_radius = _navigator->get_loiter_radius();
         _mission_item.loiter_direction = 1;
         _mission_item.nav_cmd = NAV_CMD_LOITER_TIME_LIMIT;
-        _mission_item.acceptance_radius = _param_acc_radius_at_alt.get();
-        _mission_item.time_inside = 1.0f;
+        _mission_item.acceptance_radius = _navigator->get_acceptance_radius();
+        _mission_item.time_inside = 2.0f;
         _mission_item.pitch_min = 0.0f;
         _mission_item.autocontinue = true;
         _mission_item.origin = ORIGIN_ONBOARD;
@@ -326,21 +303,13 @@ TargetLand::set_target_land_item()
         _mission_item.lat = _navigator->get_target_land_position()->lat;
         _mission_item.lon = _navigator->get_target_land_position()->lon;
 		_mission_item.altitude_is_relative = false;
-        //go down to _param_descend_alt above our target
-
-        //todo: param
-        _mission_item.altitude = _navigator->get_target_land_position()->alt + 5.0f;
-                //_navigator->get_target_land_position()->alt + _param_descend_alt.get();
-
-
+        _mission_item.altitude = _navigator->get_target_land_position()->alt + _param_highpos_alt.get();
         _mission_item.yaw = _navigator->get_target_land_position()->yaw;
         _mission_item.loiter_radius = _navigator->get_loiter_radius(); //FW
         _mission_item.loiter_direction = 1; //FW
-        //todo ? time limit?
-        //_mission_item.nav_cmd = NAV_CMD_LOITER_TIME_LIMIT;
         _mission_item.nav_cmd = NAV_CMD_LOITER_TIME_LIMIT;
-        _mission_item.acceptance_radius = _param_acc_radius_at_alt.get();
-        _mission_item.time_inside = 3.0f;
+        _mission_item.acceptance_radius = _param_accept_radius_at_highpos.get();
+        _mission_item.time_inside = 10.0f;
 		_mission_item.pitch_min = 0.0f;
 		_mission_item.autocontinue = false;
 		_mission_item.origin = ORIGIN_ONBOARD;
@@ -356,21 +325,12 @@ TargetLand::set_target_land_item()
         _mission_item.lat = _navigator->get_target_land_position()->lat;
         _mission_item.lon = _navigator->get_target_land_position()->lon;
         _mission_item.altitude_is_relative = false;
-        //go down to _param_descend_alt above our target
-
-        //todo: param
-        _mission_item.altitude = _navigator->get_target_land_position()->alt + _param_descend_alt.get();
-                //_navigator->get_target_land_position()->alt + _param_descend_alt.get();
-
-//todo: Geschwindigkeit beim Landen erforschen -> warum dort langsam, wird da was im regler gemacht?
-
+        _mission_item.altitude = _navigator->get_target_land_position()->alt + _param_loiterlow_alt.get();
         _mission_item.yaw = _navigator->get_target_land_position()->yaw;
         _mission_item.loiter_radius = _navigator->get_loiter_radius(); //FW
         _mission_item.loiter_direction = 1; //FW
-        //todo ? time limit?
-        //_mission_item.nav_cmd = NAV_CMD_LOITER_TIME_LIMIT;
         _mission_item.nav_cmd = NAV_CMD_LOITER_TIME_LIMIT;
-        _mission_item.acceptance_radius = _param_acc_radius_at_alt.get();
+        _mission_item.acceptance_radius = _param_accept_radius_at_highpos.get();
         _mission_item.time_inside = 3.0f;
         _mission_item.pitch_min = 0.0f;
         _mission_item.autocontinue = false;
@@ -384,29 +344,17 @@ TargetLand::set_target_land_item()
     }
 
     case TARGET_LAND_STATE_LOITER_LOW: {
-        //wieso brauchen wir loiter low: wir wollen uns knapp über dem Target positionieren,
-        //dort, wo das grosse target aufgrund des ungünstigen bildsensors nicht mehr sichtbar ist.
-        //gleichzeitig brauchen wir das grosse target, um in grosser höhe ein target zu erkennen
-
-        bool autoland = _param_land_delay.get() > -DELAY_SIGMA;
-
-//todo: yaw und position müssen hier genauer abgeprüft werden: nein nicht hier, sondern bei der prüfung ob mission item reached
-
+        bool autoland = _param_acceptance_time.get() > -DELAY_SIGMA;
         _mission_item.lat = _navigator->get_target_land_position()->lat;
         _mission_item.lon = _navigator->get_target_land_position()->lon;
         _mission_item.altitude_is_relative = false;
-        _mission_item.altitude = _navigator->get_target_land_position()->alt + _param_descend_alt.get();
+        _mission_item.altitude = _navigator->get_target_land_position()->alt + _param_loiterlow_alt.get();
         _mission_item.yaw = _navigator->get_target_land_position()->yaw;
         _mission_item.loiter_radius = _navigator->get_loiter_radius(); //FW
         _mission_item.loiter_direction = 1;
         _mission_item.nav_cmd = autoland ? NAV_CMD_LOITER_TIME_LIMIT : NAV_CMD_LOITER_UNLIMITED;
-        //_mission_item.nav_cmd = NAV_CMD_LOITER_TIME_LIMIT;
-        //HIER STELLEN WIR GENAUER EIN
-        _mission_item.acceptance_radius = _param_acc_radius_over_target.get();
-
-        //todo: param
-        _mission_item.time_inside = 2.0f; //_param_land_delay.get() < 0.0f ? 0.0f : _param_land_delay.get();
-
+        _mission_item.acceptance_radius = _param_accep_radius_loiterlow.get();
+        _mission_item.time_inside = _param_acceptance_time.get(); //_param_land_delay.get() < 0.0f ? 0.0f : _param_land_delay.get();
         _mission_item.pitch_min = 0.0f;
         _mission_item.autocontinue = autoland;
         _mission_item.origin = ORIGIN_ONBOARD;
@@ -424,7 +372,6 @@ TargetLand::set_target_land_item()
     }
 
     case TARGET_LAND_STATE_LAND: {
-//todo: we dont correct position anymore is this good, perhaps we need a flag to test
         _mission_item.lat = _navigator->get_target_land_position()->lat;
         _mission_item.lon = _navigator->get_target_land_position()->lon;
         _mission_item.altitude_is_relative = false;
@@ -434,7 +381,7 @@ TargetLand::set_target_land_item()
         _mission_item.loiter_radius = _navigator->get_loiter_radius();
         _mission_item.loiter_direction = 1;
         _mission_item.nav_cmd = NAV_CMD_LAND;
-        _mission_item.acceptance_radius = _param_acc_radius_over_target.get();
+        _mission_item.acceptance_radius = _param_accep_radius_loiterlow.get();
         _mission_item.time_inside = 0.0f;
         _mission_item.pitch_min = 0.0f;
         _mission_item.autocontinue = true;
@@ -454,7 +401,7 @@ TargetLand::set_target_land_item()
 		_mission_item.loiter_radius = _navigator->get_loiter_radius();
 		_mission_item.loiter_direction = 1;
 		_mission_item.nav_cmd = NAV_CMD_IDLE;
-        _mission_item.acceptance_radius = _param_acc_radius_at_alt.get();
+        _mission_item.acceptance_radius = _param_accept_radius_at_highpos.get();
 		_mission_item.time_inside = 0.0f;
 		_mission_item.pitch_min = 0.0f;
 		_mission_item.autocontinue = true;
@@ -468,19 +415,6 @@ TargetLand::set_target_land_item()
 		break;
 	}
 
-
-    //achtung
-    //todo: wir haben hier ein etwas anderes verhalten, da wir immer neue setpoints setzen
-    //wir werden das mission item nie erreichen, wenn wir es immer zurücksetzen
-    //-> wir brauchen eigene bedingungen für das loiter low
-//    if( _target_land_state_changed )
-//    {
-//        warnx("reset mission item reached");
-//        //call only if state changed in advance_target_land
-//        reset_mission_item_reached(); //resets conditions, that must be reached for mission_item_reached condition
-//        _target_land_state_changed = false;
-//    }
-
 	/* convert mission item to current position setpoint and make it valid */
 	mission_item_to_position_setpoint(&_mission_item, &pos_sp_triplet->current);
 	pos_sp_triplet->next.valid = false;
@@ -492,12 +426,6 @@ TargetLand::set_target_land_item()
 void
 TargetLand::advance_target_land()
 {
-    //Wir benötigen noch einen mechanismus, der sinken verlangsamt je näher wir dem target sind.
-    //Darin evtl. auch sinken stoppen, wenn Abweichung vom Target zu gross.
-
-    //init true by default and reset it if we did not change
-    //_target_land_state_changed = true;
-
     switch (_target_land_state) {
     case TARGET_LAND_STATE_CLIMB:
         _target_land_state = TARGET_LAND_STATE_RETURN; //orig (return brauchen wir immer nur die frage, ob wir yaw ausrichten.
@@ -516,30 +444,6 @@ TargetLand::advance_target_land()
         _target_land_state_changed = true;
         warnx("[TargetLand] advance_target_land: TARGET_LAND_STATE_GOTO_POS_HIGH");
         break;
-
-//    case TARGET_LAND_STATE_DESCEND:
-//		/* only go to land if autoland is enabled */
-//        //ghm1: if we have a delay TARGET_LAND_LAND_DELAY parameterized,
-//        //then we go to loiter state where time_inside will be parameterized to TARGET_LAND_LAND_DELAY
-//        //and descend altitude will be parameterized to targetland alt + TARGET_LAND_DESCEND_ALT.
-
-//        //As long as the Target is in field of view of the camera the relative heigth above the target
-//        //should be correct if there are no fast height estimation drifts. We could additionally advertise
-//        //the height above the target on the distance sensor topic (what happens, if it is not always valid).
-
-//        //If we loose the target from the field of view we have to takeoff again until we can see it.
-
-
-////		if (_param_land_delay.get() < -DELAY_SIGMA || _param_land_delay.get() > DELAY_SIGMA) {
-////            _target_land_state = TARGET_LAND_STATE_LOITER_HIGH;
-////            warnx("[TargetLand] advance_target_land: TARGET_LAND_STATE_LOITER");
-////        } else {
-////            _target_land_state = TARGET_LAND_STATE_LAND;
-////            warnx("[TargetLand] advance_target_land: TARGET_LAND_STATE_LAND");
-////		}
-//        _target_land_state = TARGET_LAND_STATE_LOITER_HIGH;
-//        warnx("[TargetLand] advance_target_land: TARGET_LAND_STATE_LOITER_HIGH");
-//		break;
 
     case TARGET_LAND_STATE_GOTO_POS_HIGH:
         //we go down an try to hold view of the small target
@@ -567,7 +471,6 @@ TargetLand::advance_target_land()
 		break;
 
 	default:
-        //_target_land_state_changed = false;
 		break;
 	}
 }

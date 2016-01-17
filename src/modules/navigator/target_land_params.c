@@ -44,63 +44,109 @@
  */
 
 /**
- * TARGET_LAND altitude
+ * TARGET_LAND return altitude
  *
  * Altitude to fly back in TARGET_LAND in meters
  *
  * @unit meters
  * @min 0
  * @max 150
- * @group Return To Land
+ * @group Target Land
  */
-PARAM_DEFINE_FLOAT(TL_RETURN_ALT, 10);
+PARAM_DEFINE_FLOAT(TL_RETURN_ALT, 20);
 
 
 /**
- * TARGET_LAND loiter altitude
+ * TARGET_LAND hight position altitude
  *
- * Stay at this altitude above home position after TARGET_LAND descending.
+ * This is a position over target at altitude, where the target can be seen very well.
+ * From this goto loiter low position.
+ *
+ * @unit meters
+ * @min 1.0
+ * @max 10
+ * @group Target Land
+ */
+PARAM_DEFINE_FLOAT(TL_HIGHPOS_ALT, 5);
+
+
+/**
+ * TARGET_LAND loiter low altitude
+ *
+ * Stay at this altitude above target position after TARGET_LAND descending.
  * Land (i.e. slowly descend) from this altitude if autolanding allowed.
  *
  * @unit meters
- * @min 1
- * @max 100
- * @group Return To Land
+ * @min 0.5
+ * @max 5
+ * @group Target Land
  */
-PARAM_DEFINE_FLOAT(TL_DESCEND_ALT, 1);
+PARAM_DEFINE_FLOAT(TL_LOITERLOW_ALT, 1);
+
+
 
 /**
- * TARGET_LAND delay
- *
- * Delay after descend before landing in TARGET_LAND mode.
- * If set to -1 the system will not land but loiter at NAV_LAND_ALT.
- *
- * @unit seconds
- * @min -1
- * @max 300
- * @group Return To Land
- */
-PARAM_DEFINE_FLOAT(TL_LAND_DELAY, 4.0f);
-
-/**
- * TARGET_LAND Acceptance Radius at TARGET_LAND_RETURN_ALT over target
+ * TARGET_LAND position error radius, that is allowed for statetransition to land state.
  *
  *
  * @unit meter
  * @min 0.05
- * @max 5.0
- * @group Mission
+ * @max 2.0
+ * @group Target Land
  */
-PARAM_DEFINE_FLOAT(TL_ACCEPTRAD_ALT, 0.5f);
+PARAM_DEFINE_FLOAT(TL_RADI_HIGHPOS, 0.5f);
 
 
 /**
- * TARGET_LAND Acceptance Radius, in which vehicle hast to stay for more than
+ * TARGET_LAND position error radius, that is allowed for statetransition to land state.
  *
  *
  * @unit meter
  * @min 0.05
  * @max 1.0
- * @group Mission
+ * @group Target Land
  */
-PARAM_DEFINE_FLOAT(TL_ACCEPTRAD_TAR, 0.05f);
+PARAM_DEFINE_FLOAT(TL_RADI_LOITRLOW, 0.05f);
+
+
+/**
+ * TARGET_LAND max yaw error, that is allowed for statetransition to land state.
+ *
+ *
+ * @unit meter
+ * @min 0.005
+ * @max 0.5
+ * @group Target Land
+ */
+PARAM_DEFINE_FLOAT(TL_YAWERRLOITLOW, 0.03f);
+
+
+/**
+ * TARGET_LAND time, the vehicle has to be inside TL_RADI_LOITRLOW and TL_YAWERRLOITLOW, before statetransition to land state.
+ *
+ * If set to -1, then vehicle will never land, but loiter over target at low altitude
+ *
+ * @unit seconds
+ * @min -1
+ * @max 300
+ * @group Target Land
+ */
+PARAM_DEFINE_FLOAT(TL_ACCEPT_TIME, 2.0f);
+
+
+
+
+
+/**
+ * TARGET_LAND timeout for invisibility of target in loiter low state
+ *
+ * If target is invisible for more than TL_INVIS_TIMEOUT seconds, the vehicle goes back to TL_HIGHPOS_ALT
+ *
+ * @unit seconds
+ * @min 0
+ * @max 300
+ * @group Target Land
+ */
+PARAM_DEFINE_FLOAT(TL_INVIS_TIMEOUT, 10.0f);
+
+
