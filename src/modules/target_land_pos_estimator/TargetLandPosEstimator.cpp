@@ -30,7 +30,7 @@
 
 //test diff #define TARGET_DISTANCE_L_R 2.0f
 //test results: -1.5, -1.0, 5.0
-#define TARGET_DISTANCE_L_R 0.25f
+//#define TARGET_DISTANCE_L_R 0.25f
 
 
 using namespace target_land_pos_estimator;
@@ -44,8 +44,8 @@ static const int ERROR = -1;
 //global instance
 //TargetLandPosEstimator* instance;
 
-TargetLandPosEstimator::TargetLandPosEstimator()
-    : _task_should_exit(false),
+TargetLandPosEstimator::TargetLandPosEstimator() :
+    _task_should_exit(false),
       _control_task(-1),
       /* subscriptions */
       _local_pos_sub(-1),
@@ -61,6 +61,8 @@ TargetLandPosEstimator::TargetLandPosEstimator()
     memset(&_target_land_position, 0, sizeof(_target_land_position));
 
     memset(&_ref_pos, 0, sizeof(_ref_pos));
+
+    _target_pts_dist_handle	= param_find("TLPE_PTS_DIST_LR");
 }
 
 TargetLandPosEstimator::~TargetLandPosEstimator()
@@ -138,6 +140,9 @@ TargetLandPosEstimator::task_main()
         //subscribe to topics an make a first poll
         make_subscriptions();
         poll_subscriptions();
+
+        //get parameter
+        param_get(_target_pts_dist_handle, &_target_pts_dist);
 
         /* wakeup source */
         px4_pollfd_struct_t fds[1];
@@ -323,7 +328,7 @@ TargetLandPosEstimator::calculateTargetToCameraShift()
             //warnx("TargetLandPosEstimator:calculateTargetToCameraShift: target valid");
 
             //calculate heigth above target
-            _shift_xyz(2) = TARGET_DISTANCE_L_R / _target.distLR;
+            _shift_xyz(2) = _target_pts_dist / _target.distLR;
             //calculate x/y-position offset to target
             _shift_xyz(0) = _target.M(0) * _shift_xyz(2);
             _shift_xyz(1) = _target.M(1) * _shift_xyz(2);

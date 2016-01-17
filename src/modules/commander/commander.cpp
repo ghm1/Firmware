@@ -2884,24 +2884,49 @@ set_main_state_rc(struct vehicle_status_s *status_local, struct manual_control_s
 		}
 	}
 
-	/* RTL switch overrides main switch */
-	if (sp_man->return_switch == manual_control_setpoint_s::SWITCH_POS_ON) {
-		res = main_state_transition(status_local,vehicle_status_s::MAIN_STATE_AUTO_RTL);
 
-		if (res == TRANSITION_DENIED) {
-			print_reject_mode(status_local, "AUTO_RTL");
+//ghm1: hier mit RTL auf Target_land schalten
 
-			/* fallback to LOITER if home position not set */
-			res = main_state_transition(status_local,vehicle_status_s::MAIN_STATE_AUTO_LOITER);
-		}
+//	/* RTL switch overrides main switch */
+//	if (sp_man->return_switch == manual_control_setpoint_s::SWITCH_POS_ON) {
+//		res = main_state_transition(status_local,vehicle_status_s::MAIN_STATE_AUTO_RTL);
 
-		if (res != TRANSITION_DENIED) {
-			/* changed successfully or already in this state */
-			return res;
-		}
+//		if (res == TRANSITION_DENIED) {
+//			print_reject_mode(status_local, "AUTO_RTL");
 
-		/* if we get here mode was rejected, continue to evaluate the main system mode */
-	}
+//			/* fallback to LOITER if home position not set */
+//			res = main_state_transition(status_local,vehicle_status_s::MAIN_STATE_AUTO_LOITER);
+//		}
+
+//		if (res != TRANSITION_DENIED) {
+//			/* changed successfully or already in this state */
+//			return res;
+//		}
+
+//		/* if we get here mode was rejected, continue to evaluate the main system mode */
+//	}
+
+    /* RTL switch overrides main switch */
+    //we use the RTL switch for target landing
+    if (sp_man->return_switch == manual_control_setpoint_s::SWITCH_POS_ON) {
+
+        res = main_state_transition(status_local,vehicle_status_s::MAIN_STATE_TARGET_LAND);
+
+        if (res == TRANSITION_DENIED) {
+            print_reject_mode(status_local, "TARGET LAND");
+
+            /* fallback to LOITER if target land position and home position not set */
+            res = main_state_transition(status_local,vehicle_status_s::MAIN_STATE_AUTO_LOITER);
+        }
+
+        if (res != TRANSITION_DENIED) {
+            /* changed successfully or already in this state */
+            return res;
+        }
+
+        /* if we get here mode was rejected, continue to evaluate the main system mode */
+    }
+
 
     //ghm1test
     /* target land switch overrides main switch */

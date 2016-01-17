@@ -10,6 +10,8 @@
 #include <uORB/topics/target_land_position.h>
 #include <uORB/topics/home_position.h>
 
+#include <systemlib/param/param.h>
+
 #include <geo/geo.h>
 
 namespace target_land_pos_estimator
@@ -117,6 +119,9 @@ namespace target_land_pos_estimator
 
         static bool        targetCompare(const Target& lhs, const Target& rhs);
 
+        //control::BlockParamFloat _param_target_pts_dist_l_to_r;
+        param_t     _target_pts_dist_handle;
+        float       _target_pts_dist;
     };
 
 
