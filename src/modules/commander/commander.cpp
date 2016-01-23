@@ -505,6 +505,36 @@ int commander_main(int argc, char *argv[])
         return 0;
     }
 
+    if (!strcmp(argv[1], "loiter")) {
+        int mavlink_fd_local = px4_open(MAVLINK_LOG_DEVICE, 0);
+
+        /* see if we got a home position */
+        if (status.condition_home_position_valid) {
+
+            vehicle_command_s cmd = {};
+            cmd.target_system = status.system_id;
+            cmd.target_component = status.component_id;
+
+            cmd.command = vehicle_command_s::VEHICLE_CMD_NAV_LOITER_UNLIM;
+//            cmd.param1 = MAV_MODE_FLAG_CUSTOM_MODE_ENABLED;
+//            cmd.param2 = PX4_CUSTOM_MAIN_MODE_AUTO;
+//            cmd.param2 = PX4_CUSTOM_SUB_MODE_AUTO_LOITER;
+            //cmd.param4 = home_position.yaw;
+            // cmd.param5 = home_position.lat;
+            // cmd.param6 = home_position.lon;
+            // cmd.param7 = home_position.alt;
+
+            // XXX inspect use of publication handle
+            (void)orb_advertise(ORB_ID(vehicle_command), &cmd);
+        } else {
+            warnx("rejecting loiter, no position lock yet. Please retry..");
+        }
+
+        px4_close(mavlink_fd_local);
+        return 0;
+    }
+
+
 	usage("unrecognized command");
 	return 1;
 }
@@ -645,6 +675,10 @@ bool handle_command(struct vehicle_status_s *status_local, const struct safety_s
 			}
 
 			if (base_mode & MAV_MODE_FLAG_CUSTOM_MODE_ENABLED) {
+
+                //ghm1test:
+                warnx("handle_command: MAV_MODE_FLAG_CUSTOM_MODE_ENABLED");
+
 				/* use autopilot-specific mode */
 				if (custom_main_mode == PX4_CUSTOM_MAIN_MODE_MANUAL) {
 					/* MANUAL */
@@ -663,6 +697,8 @@ bool handle_command(struct vehicle_status_s *status_local, const struct safety_s
 					if (custom_sub_mode > 0) {
 						switch(custom_sub_mode) {
 						case PX4_CUSTOM_SUB_MODE_AUTO_LOITER:
+                            //ghm1test:
+                            warnx("handle_command: PX4_CUSTOM_SUB_MODE_AUTO_LOITER");
 							main_ret = main_state_transition(status_local, vehicle_status_s::MAIN_STATE_AUTO_LOITER);
 							break;
 						case PX4_CUSTOM_SUB_MODE_AUTO_MISSION:
@@ -975,6 +1011,15 @@ bool handle_command(struct vehicle_status_s *status_local, const struct safety_s
 
 		}
 		break;
+
+    case vehicle_command_s::VEHICLE_CMD_NAV_LOITER_UNLIM: {
+            if (TRANSITION_CHANGED == main_state_transition(&status, vehicle_status_s::MAIN_STATE_AUTO_LOITER)) {
+                warnx("loitering around!");
+            } else {
+                warnx("loiter denied");
+            }
+        }
+        break;
 
 	case vehicle_command_s::VEHICLE_CMD_PREFLIGHT_REBOOT_SHUTDOWN:
 	case vehicle_command_s::VEHICLE_CMD_PREFLIGHT_CALIBRATION:
@@ -2927,26 +2972,26 @@ set_main_state_rc(struct vehicle_status_s *status_local, struct manual_control_s
         /* if we get here mode was rejected, continue to evaluate the main system mode */
     }
 
+//todo: evtl. nicht hiert?
+//    //ghm1test
+//    /* target land switch overrides main switch */
+//    if (sp_man->target_land_switch == manual_control_setpoint_s::SWITCH_POS_ON) {
+//        res = main_state_transition(status_local,vehicle_status_s::MAIN_STATE_TARGET_LAND);
 
-    //ghm1test
-    /* target land switch overrides main switch */
-    if (sp_man->target_land_switch == manual_control_setpoint_s::SWITCH_POS_ON) {
-        res = main_state_transition(status_local,vehicle_status_s::MAIN_STATE_TARGET_LAND);
+//        if (res == TRANSITION_DENIED) {
+//            print_reject_mode(status_local, "TARGET_LAND");
 
-        if (res == TRANSITION_DENIED) {
-            print_reject_mode(status_local, "TARGET_LAND");
+//            /* fallback to LOITER if home position not set and target_land position not set */
+//            res = main_state_transition(status_local,vehicle_status_s::MAIN_STATE_AUTO_LOITER);
+//        }
 
-            /* fallback to LOITER if home position not set and target_land position not set */
-            res = main_state_transition(status_local,vehicle_status_s::MAIN_STATE_AUTO_LOITER);
-        }
+//        if (res != TRANSITION_DENIED) {
+//            /* changed successfully or already in this state */
+//            return res;
+//        }
 
-        if (res != TRANSITION_DENIED) {
-            /* changed successfully or already in this state */
-            return res;
-        }
-
-        /* if we get here mode was rejected, continue to evaluate the main system mode */
-    }
+//        /* if we get here mode was rejected, continue to evaluate the main system mode */
+//    }
 
 	/* offboard and RTL switches off or denied, check main mode switch */
 	switch (sp_man->mode_switch) {

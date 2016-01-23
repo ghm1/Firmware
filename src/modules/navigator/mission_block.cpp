@@ -443,11 +443,13 @@ MissionBlock::set_loiter_item(struct mission_item_s *item, float min_clearance)
 
 		if (_navigator->get_can_loiter_at_sp() && pos_sp_triplet->current.valid) {
 			/* use current position setpoint */
+            warnx("yes we can loiter at setpoint!");
 			item->lat = pos_sp_triplet->current.lat;
 			item->lon = pos_sp_triplet->current.lon;
 			item->altitude = pos_sp_triplet->current.alt;
 
 		} else {
+            warnx("no we can not loiter at setpoint!");
 			/* use current position and use return altitude as clearance */
 			item->lat = _navigator->get_global_position()->lat;
 			item->lon = _navigator->get_global_position()->lon;

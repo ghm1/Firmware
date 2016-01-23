@@ -137,6 +137,16 @@ TargetLandPosEstimator::task_main()
     else {
         warnx("[target_land_pos_estimator] starting\n");
 
+        //queue test
+        unsigned queueSize = 11;
+        unsigned queueMid = 5;
+
+        std::vector<math::Vector<3>> targetQueue;
+        bool useQueue = true;
+        std::vector<float> xCoords(10);
+        std::vector<float> yCoords(10);
+        std::vector<float> zCoords(10);
+
         //subscribe to topics an make a first poll
         make_subscriptions();
         poll_subscriptions();
@@ -163,7 +173,7 @@ TargetLandPosEstimator::task_main()
 
             /* this is undesirable but not much we can do */
             if (pret < 0) {
-                warn("poll error %d, %d", pret, errno);
+                //warn("poll error %d, %d", pret, errno);
                 continue;
             }
 
@@ -213,6 +223,37 @@ TargetLandPosEstimator::task_main()
             _targetPosGlobal(1) = _shift_xyz(1) + _local_pos.y;
             _targetPosGlobal(2) = _shift_xyz(2) + _local_pos.z;  //we are in NED, z is negative
 
+            //find median coordinates over the last ten coordinates
+            if(useQueue)
+            {
+                targetQueue.push_back(_targetPosGlobal);
+                while(targetQueue.size() > queueSize ) {
+                    targetQueue.erase(targetQueue.begin());
+                }
+
+                if(targetQueue.size() < queueSize ) {
+                    continue;
+                }
+
+                for(int i=0; i < queueSize; ++i)
+                {
+                    xCoords[i] = targetQueue[i](0);
+                    yCoords[i] = targetQueue[i](1);
+                    zCoords[i] = targetQueue[i](2);
+                }
+
+                //sort vectors
+                std::sort(xCoords.begin(), xCoords.end());
+                std::sort(yCoords.begin(), yCoords.end());
+                std::sort(zCoords.begin(), zCoords.end());
+
+                //warnx("added Pt: x= %.5f, y= %.5f, z=%.5f ", (double)_targetPosGlobal(0), (double)_targetPosGlobal(1), (double)_targetPosGlobal(2) );
+                _targetPosGlobal(0) = xCoords[queueMid];
+                _targetPosGlobal(1) = yCoords[queueMid];
+                _targetPosGlobal(2) = zCoords[queueMid];
+                //warnx("median Pt: x= %.5f, y= %.5f, z=%.5f ", (double)_targetPosGlobal(0), (double)_targetPosGlobal(1), (double)_targetPosGlobal(2) );
+            }
+
             /* update local projection reference */
             map_projection_init(&_ref_pos, _local_pos.ref_lat, _local_pos.ref_lon);
 
@@ -227,9 +268,12 @@ TargetLandPosEstimator::task_main()
             _target_land_position.lat = est_lat;
             _target_land_position.lon = est_lon;
             _target_land_position.alt = est_alt;
-            _target_land_position.x = _shift_xyz(0);
-            _target_land_position.y = _shift_xyz(1);
-            _target_land_position.z = _shift_xyz(2);
+//            _target_land_position.x = _shift_xyz(0);
+//            _target_land_position.y = _shift_xyz(1);
+//            _target_land_position.z = _shift_xyz(2);
+            _target_land_position.x = _targetPosGlobal(0);
+            _target_land_position.y = _targetPosGlobal(1);
+            _target_land_position.z = _targetPosGlobal(2);
             _target_land_position.yaw = yaw;
 
             //warnx("[target_land_pos_estimator] advertising global position");
@@ -526,7 +570,7 @@ TargetLandPosEstimator::test1()
 
 //        warnx("target.valid: %d", (int)_target.valid );
 //        warnx("distLR: %.2f", (double)_target.distLR);
-        warnx("_shift_xyz: x= %.2f, y= %.2f, z=%.2f ", (double)_shift_xyz(0), (double)_shift_xyz(1), (double)_shift_xyz(2) );
+        //warnx("_shift_xyz: x= %.2f, y= %.2f, z=%.2f ", (double)_shift_xyz(0), (double)_shift_xyz(1), (double)_shift_xyz(2) );
 
     }
 
@@ -612,11 +656,11 @@ TargetLandPosEstimator::test3()
 
         orb_check(home_position_sub, &updated);
         if (updated) {
-            warnx("[target_land_pos_estimator] home position updated");
+            //warnx("[target_land_pos_estimator] home position updated");
             orb_copy(ORB_ID(home_position), home_position_sub, &home_pos);
         }
 
-        warnx("[target_land_pos_estimator] homepos: lat= %.5f, lon= %.5f, alt= %.5f", home_pos.lat, home_pos.lon, (double)home_pos.alt );
+        //warnx("[target_land_pos_estimator] homepos: lat= %.5f, lon= %.5f, alt= %.5f", home_pos.lat, home_pos.lon, (double)home_pos.alt );
 
         homepos_valid = true;
     }
@@ -647,7 +691,7 @@ TargetLandPosEstimator::test3()
 
         orb_check(_local_pos_sub, &updated);
         if (updated) {
-            warnx("[target_land_pos_estimator] local position updated");
+            //warnx("[target_land_pos_estimator] local position updated");
             orb_copy(ORB_ID(vehicle_local_position), _local_pos_sub, &_local_pos);
         }
 

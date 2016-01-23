@@ -705,6 +705,8 @@ bool set_nav_state(struct vehicle_status_s *status, const bool data_link_loss_en
 		break;
 
 	case vehicle_status_s::MAIN_STATE_AUTO_LOITER:
+        //ghm1navtest
+        //warnx("set_nav_state: MAIN_STATE_AUTO_LOITER");
 		/* go into failsafe on a engine failure */
 		if (status->engine_failure) {
 			status->nav_state = vehicle_status_s::NAVIGATION_STATE_AUTO_LANDENGFAIL;
@@ -749,7 +751,8 @@ bool set_nav_state(struct vehicle_status_s *status, const bool data_link_loss_en
 
 	case vehicle_status_s::MAIN_STATE_AUTO_RTL:
 		/* require global position and home, also go into failsafe on an engine failure */
-
+        //ghm1navtest
+        //warnx("set_nav_state: MAIN_STATE_AUTO_RTL");
 		if (status->engine_failure) {
 			status->nav_state = vehicle_status_s::NAVIGATION_STATE_AUTO_LANDENGFAIL;
 		} else if ((!status->condition_global_position_valid ||
@@ -810,7 +813,8 @@ bool set_nav_state(struct vehicle_status_s *status, const bool data_link_loss_en
 
     case vehicle_status_s::MAIN_STATE_TARGET_LAND:
         /* require global position and home */
-
+        //ghm1navtest
+        //warnx("set_nav_state: MAIN_STATE_TARGET_LAND");
         if (status->engine_failure) {
             status->nav_state = vehicle_status_s::NAVIGATION_STATE_AUTO_LANDENGFAIL;
         } else if ((!status->condition_global_position_valid ||
