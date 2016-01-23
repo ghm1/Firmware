@@ -452,7 +452,7 @@ int PIXY_CAM::read_device()
         std::sort(_ptAreas.begin(), _ptAreas.end());
         //if the largest point is more than three times the size of the smallest this is no valid target
         if(_ptAreas[3] > 3*_ptAreas[0]) {
-            warnx("PIXY_CAM::read_device: point size differs to much, returning.");
+            //warnx("PIXY_CAM::read_device: point size differs to much, returning.");
             return -1;
         }
     }

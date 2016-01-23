@@ -677,7 +677,7 @@ bool handle_command(struct vehicle_status_s *status_local, const struct safety_s
 			if (base_mode & MAV_MODE_FLAG_CUSTOM_MODE_ENABLED) {
 
                 //ghm1test:
-                warnx("handle_command: MAV_MODE_FLAG_CUSTOM_MODE_ENABLED");
+                //warnx("handle_command: MAV_MODE_FLAG_CUSTOM_MODE_ENABLED");
 
 				/* use autopilot-specific mode */
 				if (custom_main_mode == PX4_CUSTOM_MAIN_MODE_MANUAL) {
@@ -698,7 +698,7 @@ bool handle_command(struct vehicle_status_s *status_local, const struct safety_s
 						switch(custom_sub_mode) {
 						case PX4_CUSTOM_SUB_MODE_AUTO_LOITER:
                             //ghm1test:
-                            warnx("handle_command: PX4_CUSTOM_SUB_MODE_AUTO_LOITER");
+                            //warnx("handle_command: PX4_CUSTOM_SUB_MODE_AUTO_LOITER");
 							main_ret = main_state_transition(status_local, vehicle_status_s::MAIN_STATE_AUTO_LOITER);
 							break;
 						case PX4_CUSTOM_SUB_MODE_AUTO_MISSION:
