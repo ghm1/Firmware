@@ -139,7 +139,7 @@ TargetLandPosEstimator::task_main()
     else {
         warnx("[target_land_pos_estimator] starting\n");
 
-        //queue test
+        //medianfilter
         unsigned queueSize = 11;
         unsigned queueMid = 5;
 
@@ -148,6 +148,9 @@ TargetLandPosEstimator::task_main()
         std::vector<float> xCoords(10);
         std::vector<float> yCoords(10);
         std::vector<float> zCoords(10);
+
+        //pt distance check
+        std::vector<float> ptdistances(3);
 
         //subscribe to topics an make a first poll
         make_subscriptions();
@@ -201,6 +204,17 @@ TargetLandPosEstimator::task_main()
             //if we dont have a valid target continue
             if( !_target.valid )
                 continue;
+
+            //check if point distances are plausible
+            ptdistances[0] = ptDistance(_target.L, _target.M);
+            ptdistances[1] = ptDistance(_target.R, _target.M);
+            ptdistances[2] = ptDistance(_target.F, _target.M);
+            std::sort(ptdistances.begin(), ptdistances.end());
+            //largest point distance may only be 20 percent larget, than the smallest
+            if( ptdistances[2] > 1.2f * ptdistances[0] ) {
+                continue;
+            }
+
 
             //calculate yaw
             float yaw = atan2f(_target.F(1) - _target.M(1), _target.F(0) - _target.M(0));
