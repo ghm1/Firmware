@@ -277,6 +277,9 @@ ORB_DEFINE(camera_norm_coords, struct camera_norm_coords_s);
 #include "topics/target_land_position.h"
 ORB_DEFINE(target_land_position, struct target_land_position_s);
 
+#include "topics/target_land_offset.h"
+ORB_DEFINE(target_land_offset, struct target_land_offset_s);
+
 #include "topics/pixy_cam_pts.h"
 ORB_DEFINE(pixy_cam_pts, struct pixy_cam_pts_s);
 

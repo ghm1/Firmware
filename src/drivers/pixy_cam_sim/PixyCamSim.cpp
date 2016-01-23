@@ -36,7 +36,8 @@
 #define PIXY_CAM_SIM_FOCAL 322.5f
 #define PIXY_CAM_SIM_CENTER_X 159.0f
 #define PIXY_CAM_SIM_CENTER_Y 99.0f
-
+//NEU
+#define PIXY_CAM_SIM_NO_PTS 4
 using namespace pixy_cam_sim;
 
 /* oddly, ERROR is not defined for c++ */
@@ -112,6 +113,10 @@ PixyCamSim::task_main()
 {
     warnx("[pixy_cam_sim] starting\n");
 
+    //for false point rejection
+    std::vector<float> ptAreas(PIXY_CAM_SIM_NO_PTS);
+    bool checkPtsAreas = true;
+
     //subscribe to topics an make a first poll
     make_subscriptions();
     poll_subscriptions();
@@ -148,10 +153,32 @@ PixyCamSim::task_main()
         //make intrinsic transformation
         int count = _pixy_cam_pts_s.count;
         _camera_norm_coords_s.count = count;
-        for( int i=0; i<count; ++i )
+
+//neu
+        //we need four points, there is no optimization for error point extraction
+        if(count != PIXY_CAM_SIM_NO_PTS) {
+            continue;
+        }
+
+        if( checkPtsAreas )
+        {
+            //check point size
+            for( int i=0; i < PIXY_CAM_SIM_NO_PTS; ++i )
+            {
+                ptAreas[i] = _pixy_cam_pts_s.width[i] * _pixy_cam_pts_s.heigth[i];
+            }
+
+            std::sort(ptAreas.begin(), ptAreas.end());
+            //if the largest point is more than three times the size of the smallest this is no valid target
+            if(ptAreas[3] > 3*ptAreas[0]) {
+                continue;
+            }
+        }
+//neu ende
+
+        for( int i=0; i<PIXY_CAM_SIM_NO_PTS; ++i )
         {
             //intrinsic transform
-            math::Vector<3> pt;
             float x = (_pixy_cam_pts_s.x[i] - PIXY_CAM_SIM_CENTER_X) / PIXY_CAM_SIM_FOCAL;
             float y = (_pixy_cam_pts_s.y[i] - PIXY_CAM_SIM_CENTER_Y) / PIXY_CAM_SIM_FOCAL;
 

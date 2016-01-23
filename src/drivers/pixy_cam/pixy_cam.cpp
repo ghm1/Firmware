@@ -49,6 +49,8 @@
 #include <string.h>
 #include <sys/types.h>
 #include <math.h>
+#include <vector>
+#include <algorithm>
 
 #include <drivers/boards/px4fmu-v2/board_config.h>
 #include <drivers/device/i2c.h>
@@ -124,6 +126,11 @@ private:
 	uint32_t _read_failures;
 
     orb_advert_t _camera_norm_coords_topic;
+
+    //for false point rejection
+    std::vector<struct pixy_cam_s> _newBlocks;
+    std::vector<float> _ptAreas;
+    bool _checkPtsAreas;
 };
 
 /** global pointer for single PIXY_CAM sensor **/
@@ -142,7 +149,9 @@ PIXY_CAM::PIXY_CAM(int bus, int address) :
 	_reports(nullptr),
 	_sensor_ok(false),
     _read_failures(0),
-    _camera_norm_coords_topic(nullptr)
+    _camera_norm_coords_topic(nullptr),
+    _ptAreas(PIXY_CAM_OBJECTS_MAX),
+    _checkPtsAreas(true)
 {
 	memset(&_work, 0, sizeof(_work));
 }
@@ -407,73 +416,82 @@ int PIXY_CAM::read_device()
 	}
 
 	/** now read blocks until sync stops, first flush stale queue data **/
-	_reports->flush();
+    //_reports->flush();
 	int num_objects = 0;
 
     //get all new objects from pixy
     //todo: what about sending 5 points from pixy in one frame
-    struct pixy_cam_s block;
-    while (sync_device() && (num_objects < PIXY_CAM_OBJECTS_MAX)) {
 
+    _newBlocks.clear();
+
+    while (sync_device() && (num_objects < PIXY_CAM_OBJECTS_MAX)) {
+        struct pixy_cam_s block;
 		if (read_device_block(&block) != OK) {
 			break;
 		}
 
-		_reports->force(&block);
+        //_reports->force(&block);
+        _newBlocks.push_back(block);
         num_objects++;
 	}
 
-    //iterate over new buffer objects if there are any
-    if(num_objects > 0)
+    //test areas of points
+    //we need four points, because there is no optimization for error point extraction
+    if(num_objects != PIXY_CAM_OBJECTS_MAX) {
+        return -1;
+    }
+
+    if( _checkPtsAreas )
     {
-        struct camera_norm_coords_s report;
-        //struct camera_norm_coords_s report;
-        report.timestamp = hrt_absolute_time();
-        report.count = num_objects;
-
-//        //debug output
-//        warnx("new block with %d points, time %lld", _reports->count(), report.timestamp);
-
-        unsigned count = 0;
-        //add all new objects to topic
-        while (_reports->count() > 0) {
-            _reports->get(&block);
-
-//            warnx("x:%4.3f y:%4.3f",
-//                  (double)block.angle_x,
-//                  (double)block.angle_y);
-
-            //convert to ned
-            float x_norm = (block.angle_x - PIXY_CAM_CENTER_X) / PIXY_CAM_FOCAL_X;
-            float y_norm = (block.angle_y - PIXY_CAM_CENTER_Y) / PIXY_CAM_FOCAL_Y;
-            //conversion to polar coordinates
-            float phi = atan2f(y_norm, x_norm);
-            float r_dist_sq = x_norm * x_norm + y_norm * y_norm;
-            float r_dist = sqrtf(r_dist_sq);
-            float r_undist = PIXY_CAM_P1 * r_dist_sq * r_dist + PIXY_CAM_P3 * r_dist;
-
-            //set to report
-            float x = r_undist * cosf(phi);
-            float y = r_undist * sinf(phi);
-
-            //rotate camera about -90 degree around z (x becomes -y and y becomes x)
-            //x becomes -y
-            report.x_coord[count] = -y;
-            //y becomes x
-            report.y_coord[count] = x;
-
-            //counter increment
-            count++;
+        //check point size
+        for( int i=0; i < PIXY_CAM_OBJECTS_MAX; ++i )
+        {
+            _ptAreas[i] = _newBlocks[i].size_x * _newBlocks[i].size_y;
         }
 
-        //send new report over uorb
-        if (_camera_norm_coords_topic == nullptr) {
-            _camera_norm_coords_topic = orb_advertise(ORB_ID(camera_norm_coords), &report);
-
-        } else {
-            /* publish it */
-            orb_publish(ORB_ID(camera_norm_coords), _camera_norm_coords_topic, &report);
+        std::sort(_ptAreas.begin(), _ptAreas.end());
+        //if the largest point is more than three times the size of the smallest this is no valid target
+        if(_ptAreas[3] > 3*_ptAreas[0]) {
+            warnx("PIXY_CAM::read_device: point size differs to much, returning.");
+            return -1;
         }
+    }
+
+
+    //make intrinsic transform and undistortion calculation
+    struct camera_norm_coords_s report;
+    //struct camera_norm_coords_s report;
+    report.timestamp = hrt_absolute_time();
+    report.count = PIXY_CAM_OBJECTS_MAX;
+    for( int i=0; i<PIXY_CAM_OBJECTS_MAX; ++i) {
+        //convert to ned
+        float x_norm = (_newBlocks[i].angle_x - PIXY_CAM_CENTER_X) / PIXY_CAM_FOCAL_X;
+        float y_norm = (_newBlocks[i].angle_y - PIXY_CAM_CENTER_Y) / PIXY_CAM_FOCAL_Y;
+        //conversion to polar coordinates
+        float phi = atan2f(y_norm, x_norm);
+        float r_dist_sq = x_norm * x_norm + y_norm * y_norm;
+        float r_dist = sqrtf(r_dist_sq);
+        float r_undist = PIXY_CAM_P1 * r_dist_sq * r_dist + PIXY_CAM_P3 * r_dist;
+
+        //set to report
+        float x = r_undist * cosf(phi);
+        float y = r_undist * sinf(phi);
+
+        //rotate camera about -90 degree around z (x becomes -y and y becomes x)
+        //x becomes -y
+        report.x_coord[i] = -y;
+        //y becomes x
+        report.y_coord[i] = x;
+    }
+
+    //send new report over uorb
+    if (_camera_norm_coords_topic == nullptr) {
+        _camera_norm_coords_topic = orb_advertise(ORB_ID(camera_norm_coords), &report);
+
+    } else {
+        /* publish it */
+        orb_publish(ORB_ID(camera_norm_coords), _camera_norm_coords_topic, &report);
+    }
 
 //        //debug output
 //        warnx("new report with %d points, time %lld", report.count, report.timestamp);
@@ -483,7 +501,6 @@ int PIXY_CAM::read_device()
 //                  (double)report.x_coord[i],
 //                  (double)report.y_coord[i]);
 //        }
-    }
 
     return OK;
 }

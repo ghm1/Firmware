@@ -47,7 +47,7 @@
 #define PIXY_CAM_BASE_DEVICE_PATH	"/dev/pixy_cam"
 #define PIXY_CAM0_DEVICE_PATH	"/dev/pixy_cam0"
 
-#define PIXY_CAM_OBJECTS_MAX	5	/** up to 5 objects can be detected/reported **/
+#define PIXY_CAM_OBJECTS_MAX	4	/** up to 4 objects can be detected/reported **/
 
 /** pixy_cam_s structure returned from read calls **/
 struct pixy_cam_s {

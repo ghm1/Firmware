@@ -52,6 +52,7 @@ TargetLandPosEstimator::TargetLandPosEstimator() :
       _camera_norm_coords_sub(-1),
       _ctrl_state_sub(-1),
       _target_land_position_pub(nullptr),
+      _target_land_offset_pub(nullptr),
       _test1(false),
       _test2(false),
       _test3(false)
@@ -59,6 +60,7 @@ TargetLandPosEstimator::TargetLandPosEstimator() :
     memset(&_ctrl_state, 0, sizeof(_ctrl_state));
     memset(&_local_pos, 0, sizeof(_local_pos));
     memset(&_target_land_position, 0, sizeof(_target_land_position));
+    memset(&_target_land_offset, 0, sizeof(_target_land_offset));
 
     memset(&_ref_pos, 0, sizeof(_ref_pos));
 
@@ -183,13 +185,6 @@ TargetLandPosEstimator::task_main()
             //check if we have new messages on topics
             poll_subscriptions();
 
-            //if we dont have valid local position reference continue
-            if( !_local_pos.xy_valid && !_local_pos.z_valid )
-            {
-                //warnx("[target_land_pos_estimator] invalid local position");
-                continue;
-            }
-
 //            int count = _camera_norm_coords.count;
 //            if(count == 4)
 //            {
@@ -210,13 +205,35 @@ TargetLandPosEstimator::task_main()
             //calculate yaw
             float yaw = atan2f(_target.F(1) - _target.M(1), _target.F(0) - _target.M(0));
 
+            _target_land_offset.timestamp = hrt_absolute_time();
+            _target_land_offset.x = _shift_xyz(0);
+            _target_land_offset.y = _shift_xyz(1);
+            _target_land_offset.z = _shift_xyz(2);
+            _target_land_offset.yaw = yaw;
+
+            //publish offset
+            if (_target_land_offset_pub == nullptr) {
+                _target_land_offset_pub = orb_advertise(ORB_ID(target_land_offset), &_target_land_offset);
+
+            } else {
+                /* publish it */
+                orb_publish(ORB_ID(target_land_offset), _target_land_offset_pub, &_target_land_offset);
+            }
+
+
 //            warnx("shift_xyz: x= %.2f, y= %.2f, z=%.2f, yaw_est: %.2f", (double)_shift_xyz(0), (double)_shift_xyz(1), (double)_shift_xyz(2), (double)yaw );
 //            warnx("L: x= %.5f, y= %.5f, z=%.5f ", (double)_target.L(0), (double)_target.L(1), (double)_target.L(2) );
 //            warnx("R: x= %.5f, y= %.5f, z=%.5f ", (double)_target.R(0), (double)_target.R(1), (double)_target.R(2) );
 //            warnx("M: x= %.5f, y= %.5f, z=%.5f ", (double)_target.M(0), (double)_target.M(1), (double)_target.M(2) );
 //            warnx("F: x= %.5f, y= %.5f, z=%.5f ", (double)_target.F(0), (double)_target.F(1), (double)_target.F(2) );
-            //debug
-            //yaw = 0.0;
+
+
+            //if we dont have valid local position reference continue
+            if( !_local_pos.xy_valid && !_local_pos.z_valid )
+            {
+                //warnx("[target_land_pos_estimator] invalid local position");
+                continue;
+            }
 
             //Add shift to local position. As we are in a Body-NED frame it is just a summation.
             _targetPosGlobal(0) = _shift_xyz(0) + _local_pos.x;
