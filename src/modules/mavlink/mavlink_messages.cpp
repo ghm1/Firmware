@@ -77,6 +77,7 @@
 #include <uORB/topics/estimator_status.h>
 #include <uORB/topics/pixy_cam_pts.h>
 #include <uORB/topics/target_land_position.h>
+#include <uORB/topics/target_land_offset.h>
 #include <drivers/drv_rc_input.h>
 #include <drivers/drv_pwm_output.h>
 #include <systemlib/err.h>
@@ -2765,6 +2766,67 @@ protected:
     }
 };
 
+
+class MavlinkStreamTargetLandOffset : public MavlinkStream
+{
+public:
+    const char *get_name() const
+    {
+        return MavlinkStreamTargetLandOffset::get_name_static();
+    }
+
+    static const char *get_name_static()
+    {
+        return "TARGET_LAND_OFFSET";
+    }
+
+    uint8_t get_id()
+    {
+        return MAVLINK_MSG_ID_TARGET_LAND_OFFSET;
+    }
+
+    static MavlinkStream *new_instance(Mavlink *mavlink)
+    {
+        return new MavlinkStreamTargetLandOffset(mavlink);
+    }
+
+    unsigned get_size()
+    {
+        return MAVLINK_MSG_ID_TARGET_LAND_OFFSET_LEN + MAVLINK_NUM_NON_PAYLOAD_BYTES;
+    }
+
+private:
+    MavlinkOrbSubscription *_tl_sub;
+    uint64_t _tl_time;
+
+    /* do not allow top copying this class */
+    MavlinkStreamTargetLandOffset(MavlinkStreamTargetLandOffset &);
+    MavlinkStreamTargetLandOffset& operator = (const MavlinkStreamTargetLandOffset &);
+
+
+protected:
+    explicit MavlinkStreamTargetLandOffset(Mavlink *mavlink) : MavlinkStream(mavlink),
+        _tl_sub(_mavlink->add_orb_subscription(ORB_ID(target_land_offset))),
+        _tl_time(0)
+    {}
+
+    void send(const hrt_abstime t)
+    {
+        struct target_land_offset_s tl;
+
+        if (_tl_sub->update(&_tl_time, &tl)) {
+            mavlink_target_land_offset_t msg;
+
+            msg.time_usec = tl.timestamp;
+            msg.x = tl.x;
+            msg.y = tl.y;
+            msg.z = tl.z;
+            msg.yaw = tl.yaw;
+            _mavlink->send_message(MAVLINK_MSG_ID_TARGET_LAND_OFFSET, &msg);
+        }
+    }
+};
+
 const StreamListItem *streams_list[] = {
 	new StreamListItem(&MavlinkStreamHeartbeat::new_instance, &MavlinkStreamHeartbeat::get_name_static),
 	new StreamListItem(&MavlinkStreamStatustext::new_instance, &MavlinkStreamStatustext::get_name_static),
@@ -2805,5 +2867,6 @@ const StreamListItem *streams_list[] = {
 	new StreamListItem(&MavlinkStreamExtendedSysState::new_instance, &MavlinkStreamExtendedSysState::get_name_static),
 	new StreamListItem(&MavlinkStreamAltitude::new_instance, &MavlinkStreamAltitude::get_name_static),
     new StreamListItem(&MavlinkStreamTargetLandPosition::new_instance, &MavlinkStreamTargetLandPosition::get_name_static),
+    new StreamListItem(&MavlinkStreamTargetLandOffset::new_instance, &MavlinkStreamTargetLandOffset::get_name_static),
 	nullptr
 };

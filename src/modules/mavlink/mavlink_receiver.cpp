@@ -127,6 +127,7 @@ MavlinkReceiver::MavlinkReceiver(Mavlink *parent) :
 	_time_offset_pub(nullptr),
     _pixy_cam_pts_pub(nullptr),
     _target_land_position_pub(nullptr),
+    _target_land_offset_pub(nullptr),
 	_control_mode_sub(orb_subscribe(ORB_ID(vehicle_control_mode))),
 	_hil_frames(0),
 	_old_timestamp(0),
@@ -230,6 +231,10 @@ MavlinkReceiver::handle_message(mavlink_message_t *msg)
 
     case MAVLINK_MSG_ID_TARGET_LAND_POSITION:
         handle_message_target_land_position(msg);
+        break;
+
+    case MAVLINK_MSG_ID_TARGET_LAND_OFFSET:
+        handle_message_target_land_offset(msg);
         break;
 
 	default:
@@ -1805,6 +1810,32 @@ MavlinkReceiver::handle_message_target_land_position(mavlink_message_t *msg)
 
     } else {
         orb_publish(ORB_ID(target_land_position), _target_land_position_pub, &target_land_position);
+    }
+}
+
+
+void
+MavlinkReceiver::handle_message_target_land_offset(mavlink_message_t *msg)
+{
+    mavlink_target_land_offset_t pts;
+    mavlink_msg_target_land_offset_decode(msg, &pts);
+
+    uint64_t timestamp = hrt_absolute_time();
+
+    struct target_land_offset_s target_land_offset;
+    memset(&target_land_offset, 0, sizeof(target_land_offset));
+
+    target_land_offset.timestamp = timestamp;
+    target_land_offset.x = pts.x;
+    target_land_offset.y = pts.y;
+    target_land_offset.z = pts.z;
+    target_land_offset.yaw = pts.yaw;
+
+    if (_target_land_offset_pub == nullptr) {
+        _target_land_offset_pub = orb_advertise(ORB_ID(target_land_offset), &target_land_offset);
+
+    } else {
+        orb_publish(ORB_ID(target_land_offset), _target_land_offset_pub, &target_land_offset);
     }
 }
 

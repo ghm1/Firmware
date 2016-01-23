@@ -76,6 +76,7 @@
 #include <uORB/topics/distance_sensor.h>
 #include <uORB/topics/pixy_cam_pts.h>
 #include <uORB/topics/target_land_position.h>
+#include <uORB/topics/target_land_offset.h>
 
 #include "mavlink_ftp.h"
 
@@ -142,6 +143,7 @@ private:
     //ghm1mavtodo
     void handle_message_pixy_cam_pts(mavlink_message_t *msg);
     void handle_message_target_land_position(mavlink_message_t *msg);
+    void handle_message_target_land_offset(mavlink_message_t *msg);
 
 	void *receive_thread(void *arg);
 
@@ -201,6 +203,7 @@ private:
     //ghm1mavtodo
     orb_advert_t _pixy_cam_pts_pub;
     orb_advert_t _target_land_position_pub;
+    orb_advert_t _target_land_offset_pub;
 
 	int _control_mode_sub;
 	int _hil_frames;
