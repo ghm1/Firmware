@@ -162,7 +162,7 @@ MissionBlock::is_mission_item_reached()
 			/* if set to zero use the default instead */
 			if (mission_acceptance_radius < NAV_EPSILON_POSITION) {
                 //ghm1proof
-                warnx("ghm1proof: acceptance radius set to default");
+                //warnx("ghm1proof: acceptance radius set to default");
 				mission_acceptance_radius = _navigator->get_acceptance_radius();
 			}
 
@@ -185,12 +185,12 @@ MissionBlock::is_mission_item_reached()
 				_waypoint_yaw_reached = true;
 
                 //ghm1proof
-                warnx("ghm1proof: yaw reached");
+                //warnx("ghm1proof: yaw reached");
 			}
 
 		} else {
             //ghm1proof
-            warnx("ghm1proof: yaw reached without testing!");
+            //warnx("ghm1proof: yaw reached without testing!");
 			_waypoint_yaw_reached = true;
 		}
 	}
@@ -299,6 +299,8 @@ MissionBlock::is_mission_item_reached_precisely(float yawError)
          */
         if (dist >= 0.0f && dist <= _navigator->get_acceptance_radius(_mission_item.loiter_radius * 1.2f)) {
             _waypoint_position_reached = true;
+            //ghm1proof
+            //warnx("ghm1proof: pos reached");
         }
     } else {
         /* for normal mission items used their acceptance radius */
@@ -313,6 +315,7 @@ MissionBlock::is_mission_item_reached_precisely(float yawError)
 
         if (dist >= 0.0f && dist <= mission_acceptance_radius) {
             _waypoint_position_reached = true;
+            //warnx("ghm1proof: pos reached");
         }
     }
 
@@ -330,12 +333,12 @@ MissionBlock::is_mission_item_reached_precisely(float yawError)
                 _waypoint_yaw_reached = true;
 
                 //ghm1proof
-                warnx("ghm1proof: yaw reached");
+                //warnx("ghm1proof: yaw reached");
             }
 
         } else {
             //ghm1proof
-            warnx("ghm1proof: yaw reached without testing!");
+            //warnx("ghm1proof: yaw reached without testing!");
             _waypoint_yaw_reached = true;
         }
     }

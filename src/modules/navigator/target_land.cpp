@@ -153,18 +153,7 @@ TargetLand::on_active()
 {
     if(_target_land_state != TARGET_LAND_STATE_LANDED)
     {
-        if( _target_land_state != TARGET_LAND_STATE_LOITER_LOW )
-        {
-            //make standard position check
-            //advance statemachine if nessessary
-            if (is_mission_item_reached())
-            {
-                //warnx("mission item reached");
-                advance_target_land();
-                reset_mission_item_reached(); //resets conditions, that must be reached for mission_item_reached condition
-            }
-        }
-        else
+        if( _target_land_state == TARGET_LAND_STATE_LOITER_LOW )
         {
             //in this case we want to be more precise:
             //we check if we are at the desired position with desired yaw for some time
@@ -176,7 +165,26 @@ TargetLand::on_active()
                 reset_mission_item_reached(); //resets conditions, that must be reached for mission_item_reached condition
             }
         }
-
+        else if( _target_land_state == TARGET_LAND_STATE_GOTO_POS_HIGH )
+        {
+            if (is_mission_item_reached_precisely(0.5)) //large allowed yaw error
+            {
+                //warnx("mission item reached precisely");
+                advance_target_land();
+                reset_mission_item_reached(); //resets conditions, that must be reached for mission_item_reached condition
+            }
+        }
+        else
+        {
+            //make standard position check
+            //advance statemachine if nessessary
+            if (is_mission_item_reached())
+            {
+                //warnx("mission item reached");
+                advance_target_land();
+                reset_mission_item_reached(); //resets conditions, that must be reached for mission_item_reached condition
+            }
+        }
 
         //always update position setpoint if target land position has updated
         if( _target_land_state_changed )
@@ -250,12 +258,14 @@ TargetLand::set_target_land_item()
         _mission_item.lat = _navigator->get_target_land_position()->lat;
         _mission_item.lon = _navigator->get_target_land_position()->lon;
         _mission_item.altitude_is_relative = false;
-        _mission_item.altitude = _navigator->get_target_land_position()->alt + _param_return_alt.get();
+        //_mission_item.altitude = _navigator->get_target_land_position()->alt + _param_return_alt.get();
+        _mission_item.altitude = _navigator->get_global_position()->alt;
 
-        _mission_item.yaw = get_bearing_to_next_waypoint(
-                _navigator->get_global_position()->lat, _navigator->get_global_position()->lon,
-                _mission_item.lat, _mission_item.lon);
+//        _mission_item.yaw = get_bearing_to_next_waypoint(
+//                _navigator->get_global_position()->lat, _navigator->get_global_position()->lon,
+//                _mission_item.lat, _mission_item.lon);
         //_mission_item.yaw = _navigator->get_target_land_position()->yaw;
+        _mission_item.yaw = _navigator->get_global_position()->yaw;
 
 		_mission_item.loiter_radius = _navigator->get_loiter_radius();
 		_mission_item.loiter_direction = 1;
@@ -279,7 +289,7 @@ TargetLand::set_target_land_item()
         _mission_item.lat = _navigator->get_target_land_position()->lat;
         _mission_item.lon = _navigator->get_target_land_position()->lon;
         _mission_item.altitude_is_relative = false;
-        _mission_item.altitude = _navigator->get_target_land_position()->alt + _param_return_alt.get();
+       // _mission_item.altitude = _navigator->get_target_land_position()->alt + _param_return_alt.get();
 
         _mission_item.yaw = _navigator->get_target_land_position()->yaw;
         _mission_item.loiter_radius = _navigator->get_loiter_radius();
@@ -309,7 +319,7 @@ TargetLand::set_target_land_item()
         _mission_item.loiter_direction = 1; //FW
         _mission_item.nav_cmd = NAV_CMD_LOITER_TIME_LIMIT;
         _mission_item.acceptance_radius = _param_accept_radius_at_highpos.get();
-        _mission_item.time_inside = 10.0f;
+        _mission_item.time_inside = 2.0f;
 		_mission_item.pitch_min = 0.0f;
 		_mission_item.autocontinue = false;
 		_mission_item.origin = ORIGIN_ONBOARD;

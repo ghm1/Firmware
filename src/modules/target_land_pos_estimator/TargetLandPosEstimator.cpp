@@ -149,6 +149,12 @@ TargetLandPosEstimator::task_main()
         std::vector<float> yCoords(10);
         std::vector<float> zCoords(10);
 
+        //mean value estimation
+        bool useMedianFilter = false;
+        float sumX = 0.0;
+        float sumY = 0.0;
+        float sumZ = 0.0;
+
         //pt distance check
         std::vector<float> ptdistances(3);
 
@@ -258,7 +264,17 @@ TargetLandPosEstimator::task_main()
             if(useQueue)
             {
                 targetQueue.push_back(_targetPosGlobal);
+                //add new value
+                sumX += _targetPosGlobal(0);
+                sumY += _targetPosGlobal(1);
+                sumZ += _targetPosGlobal(2);
+
                 while(targetQueue.size() > queueSize ) {
+                    //remove old value
+                    sumX -= (*targetQueue.begin())(0);
+                    sumY -= (*targetQueue.begin())(1);
+                    sumZ -= (*targetQueue.begin())(2);
+                    //warnx("old x: %.2f", (double)((*targetQueue.begin())(0)));
                     targetQueue.erase(targetQueue.begin());
                 }
 
@@ -266,23 +282,34 @@ TargetLandPosEstimator::task_main()
                     continue;
                 }
 
-                for(int i=0; i < queueSize; ++i)
+                if( useMedianFilter )
                 {
-                    xCoords[i] = targetQueue[i](0);
-                    yCoords[i] = targetQueue[i](1);
-                    zCoords[i] = targetQueue[i](2);
+
+                    for(int i=0; i < queueSize; ++i)
+                    {
+                        xCoords[i] = targetQueue[i](0);
+                        yCoords[i] = targetQueue[i](1);
+                        zCoords[i] = targetQueue[i](2);
+                    }
+
+                    //sort vectors
+                    std::sort(xCoords.begin(), xCoords.end());
+                    std::sort(yCoords.begin(), yCoords.end());
+                    std::sort(zCoords.begin(), zCoords.end());
+
+                    //warnx("added Pt: x= %.5f, y= %.5f, z=%.5f ", (double)_targetPosGlobal(0), (double)_targetPosGlobal(1), (double)_targetPosGlobal(2) );
+                    _targetPosGlobal(0) = xCoords[queueMid];
+                    _targetPosGlobal(1) = yCoords[queueMid];
+                    _targetPosGlobal(2) = zCoords[queueMid];
+                    //warnx("median Pt: x= %.5f, y= %.5f, z=%.5f ", (double)_targetPosGlobal(0), (double)_targetPosGlobal(1), (double)_targetPosGlobal(2) );
                 }
-
-                //sort vectors
-                std::sort(xCoords.begin(), xCoords.end());
-                std::sort(yCoords.begin(), yCoords.end());
-                std::sort(zCoords.begin(), zCoords.end());
-
-                //warnx("added Pt: x= %.5f, y= %.5f, z=%.5f ", (double)_targetPosGlobal(0), (double)_targetPosGlobal(1), (double)_targetPosGlobal(2) );
-                _targetPosGlobal(0) = xCoords[queueMid];
-                _targetPosGlobal(1) = yCoords[queueMid];
-                _targetPosGlobal(2) = zCoords[queueMid];
-                //warnx("median Pt: x= %.5f, y= %.5f, z=%.5f ", (double)_targetPosGlobal(0), (double)_targetPosGlobal(1), (double)_targetPosGlobal(2) );
+                else
+                {
+                    //calculate mean value over queue
+                    _targetPosGlobal(0) = sumX / queueSize;
+                    _targetPosGlobal(1) = sumY / queueSize;
+                    _targetPosGlobal(2) = sumZ / queueSize;
+                }
             }
 
             /* update local projection reference */
@@ -404,9 +431,14 @@ TargetLandPosEstimator::calculateTargetToCameraShift()
 
             //calculate heigth above target
             _shift_xyz(2) = _target_pts_dist / _target.distLR;
-            //calculate x/y-position offset to target
-            _shift_xyz(0) = _target.M(0) * _shift_xyz(2);
-            _shift_xyz(1) = _target.M(1) * _shift_xyz(2);
+            //calculate x/y-position offset to target: middle of target * height
+            //new target origin is between M and F
+            _shift_xyz(0) = (_target.M(0) + _target.F(0)) / 2 * _shift_xyz(2);
+            _shift_xyz(1) = (_target.M(1) + _target.F(1)) / 2 * _shift_xyz(2);
+
+            //old target origin was M
+//            _shift_xyz(0) = _target.M(0) * _shift_xyz(2);
+//            _shift_xyz(1) = _target.M(1) * _shift_xyz(2);
 
             //warnx("distLR: %.2f", (double)_target.distLR);
 
